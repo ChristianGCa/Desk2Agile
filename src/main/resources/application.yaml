@@ -1,0 +1,85 @@
+server:
+  port: 8081
+
+taiga:
+  api:
+    url: ${TAIGA_URL}
+    username: ${TAIGA_USERNAME}
+    password: ${TAIGA_PASSWORD}
+  web:
+    url: ${TAIGA_WEB_URL}
+  routing:
+    # Nome do projeto Taiga onde os chamados sem entidades irão
+    fallback-project-name: Diversos
+    
+    # Mapeamento de entidades do GLPI e Projetos Taiga.
+    # Por exemplo:
+    #
+    # - glpi-entity-name: Serviço 1
+    # - taiga-project-name: Projeto 1
+    #
+    # Isso significa que use um chamado for do "Serviço 1",
+    # uma Issue será criada no projeto "Projeto 1" no Taiga.
+    entity-mappings:
+      - glpi-entity-name: Serviço 1
+        taiga-project-name: Serviço 1
+      - glpi-entity-name: Serviço 2
+        taiga-project-name: Serviço 2
+glpi:
+  api:
+    url: ${GLPI_URL}
+    app-token: ${GLPI_APP_TOKEN}
+    user-token: ${GLPI_USER_TOKEN}
+    # Categoria que dispara criação de issues no Taiga (comparação sem diferenciar maiúsculas).
+    # Use "*" para qualquer categoria; vazio = este gatilho desligado.
+    category-that-send-to-taiga: Desenvolvimento
+
+    # Login GLPI (campo "name" ou display_name em team com role "assigned").
+    # Dispara mesmo fora da categoria acima. "*" = ignora filtro de técnico (sempre casando este ramo); vazio = desligado.
+    assignee-that-send-to-taiga: "tech"
+
+  plugin-fields:
+    # -----------------------------------------------------------------------
+    # Bloco "Taiga" (visível apenas para a equipe)
+    # Contém: ID Taiga, Link Taiga
+    # Rota derivada: /PluginFieldsTickettaiga
+    # -----------------------------------------------------------------------
+    private-ticket-status-block-name: Taiga
+
+    # -----------------------------------------------------------------------
+    # Bloco "Progresso do chamado" (visível para todos)
+    # Contém: Status do chamado, Data prevista
+    # Rota derivada: /PluginFieldsTicketprogressodochamado
+    # -----------------------------------------------------------------------
+    public-ticket-status-block-name: Progresso do chamado
+
+    # Campos do bloco privado "Taiga".
+    # Informe o nome exato do campo conforme aparece no GLPI.
+    # O sistema converte automaticamente para o nome da API
+    # removendo acentos, espaços e caracteres especiais e adicionando "field" no final.
+    # Exemplos: "ID Taiga" -> "idtaigafield" | "Link Taiga" -> "linktaigafield"
+    private-fields:
+      id-taiga: ID Taiga
+      link-taiga: Link Taiga
+
+    # Campos do bloco público "Progresso do chamado".
+    # Exemplos: "Status do chamado" -> "statusdochamadofield" | "Data prevista" -> "dataprevistafield"
+    public-fields:
+      status-chamado: Status do chamado
+      data-prevista: Data prevista
+
+    # Status inicial colocado no campo "Status do chamado" ao criar a Issue no Taiga.
+    status-inicial: New
+
+  entities:
+    # Nome da entidade raiz do GLPI.
+    root-name: Entidade raiz
+
+security:
+  webhook:
+    # IPs que podem chamar /api/webhook/*. Lista vazia = todos.
+    # Inclua "*" em qualquer entrada para liberar qualquer IP (útil com placeholders de env).
+    allowed-ips:
+      "*"
+      #- ${WEBHOOK_ALLOWED_IP_GLPI}
+      #- ${WEBHOOK_ALLOWED_IP_TAIGA}
