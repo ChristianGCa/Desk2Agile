@@ -31,6 +31,7 @@ public class IntegrationService {
     private final TaigaIntegrationService taigaIntegrationService;
     private final GlpiIntegrationService glpiIntegrationService;
     private final ProjectRoutingService projectRoutingService;
+    private final FailureLogService failureLogService;
 
     /** Lock listrado para mitigar concorrência local baseada no ID do ticket. */
     private final Object[] locks = new Object[LOCK_STRIPES];
@@ -50,10 +51,12 @@ public class IntegrationService {
     public IntegrationService(
             TaigaIntegrationService taigaIntegrationService,
             GlpiIntegrationService glpiIntegrationService,
-            ProjectRoutingService projectRoutingService) {
+            ProjectRoutingService projectRoutingService,
+            FailureLogService failureLogService) {
         this.taigaIntegrationService = taigaIntegrationService;
         this.glpiIntegrationService = glpiIntegrationService;
         this.projectRoutingService = projectRoutingService;
+        this.failureLogService = failureLogService;
 
         for (int i = 0; i < LOCK_STRIPES; i++) {
             locks[i] = new Object();
@@ -682,6 +685,7 @@ public class IntegrationService {
         }
 
         if (lastException != null) {
+            failureLogService.logFailure("Esgotadas as tentativas de autenticação", lastException);
             throw lastException;
         }
     }

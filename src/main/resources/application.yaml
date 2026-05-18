@@ -83,3 +83,8 @@ security:
       "*"
       #- ${WEBHOOK_ALLOWED_IP_GLPI}
       #- ${WEBHOOK_ALLOWED_IP_TAIGA}
+
+logging:
+  integration:
+    # Local onde o arquivo de log de falhas de integração será salvo
+    failure-file: integration_failures.log

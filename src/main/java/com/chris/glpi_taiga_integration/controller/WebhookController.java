@@ -25,12 +25,19 @@ public class WebhookController {
     private final IntegrationService integrationService;
 
     /**
-     * Injeta o serviço de integração.
+     * Serviço para log de falhas em arquivo.
+     */
+    private final com.chris.glpi_taiga_integration.service.FailureLogService failureLogService;
+
+    /**
+     * Injeta os serviços necessários.
      *
      * @param integrationService serviço de integração
+     * @param failureLogService serviço de log de falhas
      */
-    public WebhookController(IntegrationService integrationService) {
+    public WebhookController(IntegrationService integrationService, com.chris.glpi_taiga_integration.service.FailureLogService failureLogService) {
         this.integrationService = integrationService;
+        this.failureLogService = failureLogService;
     }
 
     /**
@@ -53,9 +60,11 @@ public class WebhookController {
             return ResponseEntity.ok("Webhook GLPI processado com sucesso.");
         } catch (GlpiPluginFieldsException e) {
             log.error("ROTA /glpi - Erro no Plugin Fields: {}", e.getMessage());
+            failureLogService.logFailure("Webhook GLPI (Plugin Fields)", e);
             return ResponseEntity.badRequest().body("Erro no Plugin Fields do GLPI: " + e.getMessage());
         } catch (Exception e) {
             log.error("ROTA /glpi - Erro ao processar webhook", e);
+            failureLogService.logFailure("Webhook GLPI", e);
             return ResponseEntity.internalServerError().body("Erro interno ao processar webhook GLPI.");
         }
     }
@@ -86,9 +95,11 @@ public class WebhookController {
             return ResponseEntity.ok("Webhook Taiga processado com sucesso.");
         } catch (GlpiPluginFieldsException e) {
             log.error("ROTA /taiga - Erro no Plugin Fields: {}", e.getMessage());
+            failureLogService.logFailure("Webhook Taiga (Plugin Fields)", e);
             return ResponseEntity.badRequest().body("Erro no Plugin Fields do GLPI: " + e.getMessage());
         } catch (Exception e) {
             log.error("ROTA /taiga - Erro ao processar webhook", e);
+            failureLogService.logFailure("Webhook Taiga", e);
             return ResponseEntity.internalServerError().body("Erro interno ao processar webhook Taiga.");
         }
     }
