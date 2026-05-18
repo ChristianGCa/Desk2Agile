@@ -161,7 +161,7 @@ class IntegrationServiceTest {
     @Test
     void processaGlpi_ticketJaPossuiIssueTaiga_naoReprocessa() {
         ReflectionTestUtils.setField(integrationService, "categoryThatSendToTaiga", "*");
-        var recordExistente = new GlpiPluginFieldsRecord(1L, 10L, "123");
+        var recordExistente = new GlpiPluginFieldsRecord(1L, 10L, "123", "http://taiga/issue/1");
         when(glpiIntegrationService.initSession()).thenReturn("session");
         when(glpiIntegrationService.getPluginFieldsRecord(any(), any()))
                 .thenReturn(Optional.of(recordExistente));
@@ -176,7 +176,7 @@ class IntegrationServiceTest {
     @Test
     void processaGlpi_recordComIdTaigaZero_reprocessa() {
         ReflectionTestUtils.setField(integrationService, "categoryThatSendToTaiga", "*");
-        var recordComIdZero = new GlpiPluginFieldsRecord(1L, 10L, "0");
+        var recordComIdZero = new GlpiPluginFieldsRecord(1L, 10L, "0", null);
         when(glpiIntegrationService.initSession()).thenReturn("session");
         when(glpiIntegrationService.getPluginFieldsRecord(any(), any()))
                 .thenReturn(Optional.of(recordComIdZero));
@@ -224,7 +224,7 @@ class IntegrationServiceTest {
     void processaTaiga_acaoCreate_ignorada() {
         var payload = new TaigaWebhookPayload(
                 "create", "issue",
-                new TaigaIssueData(1L, 1L, "Issue", "Desc", new TaigaStatusData(1L, "New")));
+                new TaigaIssueData(1L, 1L, "Issue", "Desc", new TaigaStatusData(1L, "New"), null, null, null), null);
 
         integrationService.processTaigaWebhook(payload);
 
@@ -235,7 +235,7 @@ class IntegrationServiceTest {
     void processaTaiga_tipoNaoIssue_ignorado() {
         var payload = new TaigaWebhookPayload(
                 "change", "userstory",
-                new TaigaIssueData(1L, 1L, "US", "Desc", new TaigaStatusData(1L, "In Progress")));
+                new TaigaIssueData(1L, 1L, "US", "Desc", new TaigaStatusData(1L, "In Progress"), null, null, null), null);
 
         integrationService.processTaigaWebhook(payload);
 
@@ -245,12 +245,11 @@ class IntegrationServiceTest {
     @Test
     void processaTaiga_ticketGlpiNaoEncontrado_naoAtualiza() {
         when(glpiIntegrationService.initSession()).thenReturn("session");
-        when(taigaIntegrationService.authenticateInTaiga()).thenReturn("taiga-token");
         when(glpiIntegrationService.getTicketByIdTaiga(any(), any())).thenReturn(Optional.empty());
 
         var payload = new TaigaWebhookPayload(
                 "change", "issue",
-                new TaigaIssueData(99L, 5L, "Issue", "Desc", new TaigaStatusData(2L, "In Progress")));
+                new TaigaIssueData(99L, 5L, "Issue", "Desc", new TaigaStatusData(2L, "In Progress"), null, null, null), null);
 
         integrationService.processTaigaWebhook(payload);
 

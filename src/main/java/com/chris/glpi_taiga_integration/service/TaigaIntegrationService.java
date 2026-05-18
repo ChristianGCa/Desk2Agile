@@ -6,6 +6,8 @@ import com.chris.glpi_taiga_integration.dto.TaigaIssueDetailsResponse;
 import com.chris.glpi_taiga_integration.dto.TaigaIssueRequest;
 import com.chris.glpi_taiga_integration.dto.TaigaIssueResponse;
 import com.chris.glpi_taiga_integration.dto.TaigaProjectResponse;
+import com.chris.glpi_taiga_integration.dto.TaigaUserStoryDetailsResponse;
+import com.chris.glpi_taiga_integration.dto.TaigaUserStoryStatusResponse;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +24,7 @@ public class TaigaIntegrationService {
     private static final Logger log = LoggerFactory.getLogger(TaigaIntegrationService.class);
 
     static final String TAIGA_TOKEN_CACHE = "taigaToken";
-    static final String CACHE_KEY = "'token'";  
+    static final String CACHE_KEY = "'token'";
 
     private final RestClient restClient;
     private final CacheManager cacheManager;
@@ -45,17 +47,6 @@ public class TaigaIntegrationService {
         this.cacheManager = cacheManager;
     }
 
-    /**
-     * Autentica (ou reutiliza autenticação) no Taiga.
-     *
-     * <p>O token JWT retornado pelo Taiga é armazenado em cache pelo TTL configurado em
-     * {@code cache.taiga.token-ttl-hours} (padrão: 12h). Chamadas subsequentes dentro da
-     * janela de TTL não fazem nenhuma requisição HTTP ao Taiga.
-     *
-     * <p><b>Atenção:</b> este método deve ser invocado sempre via proxy Spring (i.e., a partir de
-     * outro bean), nunca via {@code this.authenticateInTaiga()}, para que o {@code @Cacheable}
-     * seja aplicado.
-     */
     @Cacheable(value = TAIGA_TOKEN_CACHE, key = CACHE_KEY)
     public String authenticateInTaiga() {
         log.info("TAIGA SERVICE - Autenticando no Taiga (nova requisição)...");
@@ -76,12 +67,6 @@ public class TaigaIntegrationService {
         return authResponse.authToken();
     }
 
-    /**
-     * Invalida o token Taiga em cache.
-     *
-     * <p>Use quando receber 401 do Taiga para forçar nova autenticação na próxima chamada a
-     * {@link #authenticateInTaiga()}.
-     */
     public void invalidateTaigaToken() {
         Optional.ofNullable(cacheManager.getCache(TAIGA_TOKEN_CACHE))
                 .ifPresent(cache -> {
@@ -93,8 +78,7 @@ public class TaigaIntegrationService {
     public TaigaIssueResponse createIssueOnTaiga(Long projectId, String title, String description, String token) {
         log.info("TAIGA SERVICE - Criando issue no Taiga: projetoId={} título='{}'.", projectId, title);
         TaigaIssueRequest requestBody = new TaigaIssueRequest(
-                projectId, title, description,
-                null, null, null);
+                projectId, title, description, null, null, null);
 
         return restClient.post()
                 .uri(taigaApiUrl + "/issues")
@@ -106,25 +90,24 @@ public class TaigaIntegrationService {
     }
 
     public String buildTaigaIssueUrl(String projectSlug, Long ref) {
-        if (ref == null) {
-            log.warn("TAIGA SERVICE - ref da issue não disponível, URL não será gerada.");
-            return null;
-        }
-        if (projectSlug == null || projectSlug.isBlank()) {
-            log.warn("TAIGA SERVICE - projectSlug não disponível, URL não será gerada.");
-            return null;
-        }
+        if (ref == null || projectSlug == null || projectSlug.isBlank()) return null;
+        return normalizeBaseUrl() + "/project/" + projectSlug + "/issue/" + ref;
+    }
 
-        String baseUrl = taigaWebUrl.endsWith("/")
+    public String buildTaigaUserStoryUrl(String projectSlug, Long ref) {
+        if (ref == null || projectSlug == null || projectSlug.isBlank()) return null;
+        return normalizeBaseUrl() + "/project/" + projectSlug + "/us/" + ref;
+    }
+
+    private String normalizeBaseUrl() {
+        return taigaWebUrl.endsWith("/")
                 ? taigaWebUrl.substring(0, taigaWebUrl.length() - 1)
                 : taigaWebUrl;
-
-        return baseUrl + "/project/" + projectSlug + "/issue/" + ref;
     }
 
     @Cacheable(value = "taigaProjects", key = "'slug:' + #slug")
     public TaigaProjectResponse getProjectBySlug(String slug, String token) {
-        log.info("TAIGA SERVICE - Buscando projeto no Taiga por slug='{}'.", slug);
+        log.info("TAIGA SERVICE - Buscando projeto por slug='{}'.", slug);
         return restClient.get()
                 .uri(taigaApiUrl + "/projects/by_slug?slug=" + slug)
                 .header("Authorization", "Bearer " + token)
@@ -134,7 +117,7 @@ public class TaigaIntegrationService {
 
     @Cacheable(value = "taigaProjects", key = "'id:' + #projectId")
     public TaigaProjectResponse getProjectById(Long projectId, String token) {
-        log.info("TAIGA SERVICE - Buscando projeto no Taiga por id={}.", projectId);
+        log.info("TAIGA SERVICE - Buscando projeto por id={}.", projectId);
         return restClient.get()
                 .uri(taigaApiUrl + "/projects/" + projectId)
                 .header("Authorization", "Bearer " + token)
@@ -149,5 +132,23 @@ public class TaigaIntegrationService {
                 .header("Authorization", "Bearer " + token)
                 .retrieve()
                 .body(TaigaIssueDetailsResponse.class);
+    }
+
+    public TaigaUserStoryDetailsResponse getUserStoryDetails(Long userStoryId, String token) {
+        log.info("TAIGA SERVICE - Buscando detalhes da história id={}.", userStoryId);
+        return restClient.get()
+                .uri(taigaApiUrl + "/userstories/" + userStoryId)
+                .header("Authorization", "Bearer " + token)
+                .retrieve()
+                .body(TaigaUserStoryDetailsResponse.class);
+    }
+
+    public TaigaUserStoryStatusResponse getUserStoryStatus(Long statusId, String token) {
+        log.info("TAIGA SERVICE - Buscando nome do status de história id={}.", statusId);
+        return restClient.get()
+                .uri(taigaApiUrl + "/userstory-statuses/" + statusId)
+                .header("Authorization", "Bearer " + token)
+                .retrieve()
+                .body(TaigaUserStoryStatusResponse.class);
     }
 }

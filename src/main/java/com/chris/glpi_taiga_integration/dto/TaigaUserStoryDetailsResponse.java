@@ -2,16 +2,13 @@ package com.chris.glpi_taiga_integration.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record TaigaIssueData(
+public record TaigaUserStoryDetailsResponse(
         Long id,
         Long ref,
-        String subject,
-        String description,
-        TaigaStatusData status,
         @JsonProperty("due_date") String dueDate,
-        @JsonProperty("promoted_to") List<Long> promotedTo,
+        @JsonProperty("project") Long projectId,
+        @JsonProperty("status") Long statusId,
         @JsonProperty("generated_from_issue") Long generatedFromIssue
 ) {}

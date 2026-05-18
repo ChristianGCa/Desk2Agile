@@ -34,13 +34,11 @@ public class WebhookController {
             integrationService.processGlpiWebhook(payload);
             return ResponseEntity.ok("Webhook GLPI processado com sucesso.");
         } catch (GlpiPluginFieldsException e) {
-            log.error("ROTA /glpi - Erro de configuração/integração com Plugin Fields: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                    .body("Erro no Plugin Fields do GLPI: " + e.getMessage());
+            log.error("ROTA /glpi - Erro no Plugin Fields: {}", e.getMessage());
+            return ResponseEntity.badRequest().body("Erro no Plugin Fields do GLPI: " + e.getMessage());
         } catch (Exception e) {
             log.error("ROTA /glpi - Erro ao processar webhook", e);
-            return ResponseEntity.internalServerError()
-                    .body("Erro interno ao processar webhook GLPI.");
+            return ResponseEntity.internalServerError().body("Erro interno ao processar webhook GLPI.");
         }
     }
 
@@ -53,22 +51,21 @@ public class WebhookController {
             return ResponseEntity.badRequest().body("Payload inválido: data ausente.");
         }
 
-        if (!"issue".equals(payload.type())) {
-            log.info("ROTA /taiga - Evento ignorado: tipo não é issue (tipo={}).", payload.type());
-            return ResponseEntity.ok("Evento ignorado: tipo não é issue (tipo=" + payload.type() + ").");
+        String type = payload.type();
+        if (!"issue".equals(type) && !"userstory".equals(type)) {
+            log.info("ROTA /taiga - Evento ignorado: tipo '{}' não tratado.", type);
+            return ResponseEntity.ok("Evento ignorado: tipo '" + type + "' não tratado.");
         }
 
         try {
             integrationService.processTaigaWebhook(payload);
             return ResponseEntity.ok("Webhook Taiga processado com sucesso.");
         } catch (GlpiPluginFieldsException e) {
-            log.error("ROTA /taiga - Erro de configuração/integração com Plugin Fields: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                    .body("Erro no Plugin Fields do GLPI: " + e.getMessage());
+            log.error("ROTA /taiga - Erro no Plugin Fields: {}", e.getMessage());
+            return ResponseEntity.badRequest().body("Erro no Plugin Fields do GLPI: " + e.getMessage());
         } catch (Exception e) {
             log.error("ROTA /taiga - Erro ao processar webhook", e);
-            return ResponseEntity.internalServerError()
-                    .body("Erro interno ao processar webhook Taiga.");
+            return ResponseEntity.internalServerError().body("Erro interno ao processar webhook Taiga.");
         }
     }
 }

@@ -1,7 +1,6 @@
 package com.chris.glpi_taiga_integration.config;
 
 import jakarta.annotation.PostConstruct;
-import java.text.Normalizer;
 import java.util.Locale;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -145,8 +144,10 @@ public class GlpiPluginFieldsProperties {
             return sanitizedInput;
         }
 
-        String normalized = Normalizer.normalize(sanitizedInput, Normalizer.Form.NFD)
-                .replaceAll("\\p{M}+", "")
+        // GLPI Plugin Fields descarta caracteres não-ASCII diretamente (não transliteram).
+        // Ex: "Previsão" → "Previso" (ã é descartado, não convertido para a).
+        // NFD + remoção de combining marks produziria "Previsao" — errado.
+        String normalized = sanitizedInput
                 .toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9]", "");
 

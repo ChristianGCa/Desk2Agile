@@ -8,15 +8,12 @@ import com.chris.glpi_taiga_integration.dto.GlpiTicketResponse;
 import com.chris.glpi_taiga_integration.dto.GlpiUpdateTicketRequest;
 import com.chris.glpi_taiga_integration.exception.GlpiPluginFieldsException;
 import jakarta.annotation.PreDestroy;
-import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -70,23 +67,15 @@ public class GlpiIntegrationService {
     // ------------------------------------------------------------------
 
     private String buildPluginPathNormalized(String blockName) {
-        String sanitized = Normalizer.normalize(blockName, Normalizer.Form.NFD)
-                .replaceAll("\\p{M}+", "")
+        // GLPI descarta caracteres não-ASCII (não transliteram via NFD).
+        String sanitized = blockName
                 .toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9]", "");
         return "/PluginFieldsTicket" + sanitized;
     }
 
-    private String buildPluginPathNoSpaces(String blockName) {
-        String sanitized = blockName.toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
-        return "/PluginFieldsTicket" + sanitized;
-    }
-
     private List<String> buildPluginPathCandidates(String blockName) {
-        Set<String> candidates = new LinkedHashSet<>();
-        candidates.add(buildPluginPathNormalized(blockName));
-        candidates.add(buildPluginPathNoSpaces(blockName));
-        return new ArrayList<>(candidates);
+        return List.of(buildPluginPathNormalized(blockName));
     }
 
     private boolean isResourceNotFound(RestClientResponseException e) {
@@ -519,13 +508,14 @@ public class GlpiIntegrationService {
         Long id = getRequiredLong(rawRecord, "id");
         Long itemsId = getRequiredLong(rawRecord, "items_id");
         String idTaigaValue = getRequiredString(rawRecord, pluginFieldsProperties.privateIdTaigaApiField());
-        return new GlpiPluginFieldsRecord(id, itemsId, idTaigaValue);
+        String linkTaigaValue = getString(rawRecord, pluginFieldsProperties.privateLinkTaigaApiField());
+        return new GlpiPluginFieldsRecord(id, itemsId, idTaigaValue, linkTaigaValue);
     }
 
     private GlpiPluginFieldsRecord toPublicRecord(Map<String, Object> rawRecord) {
         Long id = getRequiredLong(rawRecord, "id");
         Long itemsId = getRequiredLong(rawRecord, "items_id");
-        return new GlpiPluginFieldsRecord(id, itemsId, null);
+        return new GlpiPluginFieldsRecord(id, itemsId, null, null);
     }
 
     // ------------------------------------------------------------------
@@ -556,9 +546,20 @@ public class GlpiIntegrationService {
         input.put("itemtype", "Ticket");
         input.put(pluginFieldsProperties.publicStatusChamadoApiField(), status);
         if (dataPrevista != null && !dataPrevista.isBlank()) {
-            input.put(pluginFieldsProperties.publicDataPrevistaApiField(), dataPrevista);
+            input.put(pluginFieldsProperties.publicDataPrevistaApiField(), toGlpiDateFormat(dataPrevista));
         }
         return Map.of("input", input);
+    }
+
+    /**
+     * Converte data de "YYYY-MM-DD" (formato Taiga) para "DD/MM/YYYY" (formato esperado pelo GLPI Plugin Fields).
+     * Se a entrada não estiver no formato esperado, retorna o valor original sem alteração.
+     */
+    private static String toGlpiDateFormat(String isoDate) {
+        if (isoDate == null || !isoDate.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            return isoDate;
+        }
+        return isoDate.substring(8, 10) + "/" + isoDate.substring(5, 7) + "/" + isoDate.substring(0, 4);
     }
 
     // ------------------------------------------------------------------
@@ -587,5 +588,10 @@ public class GlpiIntegrationService {
         }
         Object value = rawRecord.get(fieldName);
         return value == null ? "" : String.valueOf(value);
+    }
+
+    private String getString(Map<String, Object> rawRecord, String fieldName) {
+        Object value = rawRecord.get(fieldName);
+        return (value == null || "null".equals(String.valueOf(value))) ? null : String.valueOf(value);
     }
 }

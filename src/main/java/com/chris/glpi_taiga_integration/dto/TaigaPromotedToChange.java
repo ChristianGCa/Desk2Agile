@@ -1,11 +1,10 @@
 package com.chris.glpi_taiga_integration.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record TaigaWebhookPayload(
-        String action,
-        String type,
-        TaigaIssueData data,
-        TaigaWebhookChange change
+public record TaigaPromotedToChange(
+        List<Long> from,
+        List<Long> to
 ) {}
