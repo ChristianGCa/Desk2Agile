@@ -7,7 +7,6 @@ import com.chris.glpi_taiga_integration.dto.GlpiWebhookPayload;
 import com.chris.glpi_taiga_integration.dto.TaigaIssueData;
 import com.chris.glpi_taiga_integration.dto.TaigaPromotedToChange;
 import com.chris.glpi_taiga_integration.dto.TaigaUserStoryDetailsResponse;
-import com.chris.glpi_taiga_integration.dto.TaigaUserStoryStatusResponse;
 import com.chris.glpi_taiga_integration.dto.TaigaWebhookPayload;
 import com.chris.glpi_taiga_integration.exception.IntegrationAuthenticationException;
 import java.util.List;
@@ -36,6 +35,9 @@ public class IntegrationService {
 
     @Value("${glpi.api.assignee-that-send-to-taiga:}")
     private String assigneeThatSendToTaiga;
+
+    @Value("${integration.auth.max-retries:1}")
+    private int maxAuthRetries;
 
     public IntegrationService(
             TaigaIntegrationService taigaIntegrationService,
@@ -69,16 +71,10 @@ public class IntegrationService {
         }
 
         Long ticketId = item.id();
-        Object lock = locks[Math.abs(ticketId.hashCode() % LOCK_STRIPES)];
+        Object lock = locks[(ticketId.hashCode() & 0x7FFFFFFF) % LOCK_STRIPES];
 
         synchronized (lock) {
-            try {
-                doProcessGlpiWebhook(item, ticketId);
-            } catch (IntegrationAuthenticationException e) {
-                log.warn("GLPI - Auth falhou na 1ª tentativa para ticket {}. Re-tentando. Motivo: {}",
-                        ticketId, e.getMessage());
-                doProcessGlpiWebhook(item, ticketId);
-            }
+            withAuthRetry(() -> doProcessGlpiWebhook(item, ticketId));
         }
     }
 
@@ -186,24 +182,13 @@ public class IntegrationService {
                 return;
             }
             log.info("TAIGA - Issue {} promovida para história {}.", data.id(), newUserStoryId);
-            try {
-                doHandleIssuePromotion(data.id(), newUserStoryId);
-            } catch (IntegrationAuthenticationException e) {
-                log.warn("TAIGA - Auth falhou ao processar promoção da issue {}. Re-tentando. Motivo: {}",
-                        data.id(), e.getMessage());
-                doHandleIssuePromotion(data.id(), newUserStoryId);
-            }
+            withAuthRetry(() -> doHandleIssuePromotion(data.id(), newUserStoryId));
         } else {
             if (data.id() == null || data.status() == null) {
                 log.warn("TAIGA - Payload de issue inválido recebido.");
                 return;
             }
-            try {
-                doProcessTaigaIssueUpdate(data);
-            } catch (IntegrationAuthenticationException e) {
-                log.warn("TAIGA - Auth falhou para issue {}. Re-tentando. Motivo: {}", data.id(), e.getMessage());
-                doProcessTaigaIssueUpdate(data);
-            }
+            withAuthRetry(() -> doProcessTaigaIssueUpdate(data));
         }
     }
 
@@ -310,12 +295,7 @@ public class IntegrationService {
             log.warn("TAIGA - Payload de história inválido (status ausente).");
             return;
         }
-        try {
-            doProcessUserStoryUpdate(data);
-        } catch (IntegrationAuthenticationException e) {
-            log.warn("TAIGA - Auth falhou para história {}. Re-tentando. Motivo: {}", data.id(), e.getMessage());
-            doProcessUserStoryUpdate(data);
-        }
+        withAuthRetry(() -> doProcessUserStoryUpdate(data));
     }
 
     private void doProcessUserStoryUpdate(TaigaIssueData us) {
@@ -337,5 +317,30 @@ public class IntegrationService {
         glpiIntegrationService.syncExternalProgress(ticketId, statusNome, dataPrevista, sessionToken);
         log.info("TAIGA - Ticket {} atualizado via história {}: status='{}', dataPrevista={}.",
                 ticketId, us.id(), statusNome, dataPrevista);
+    }
+
+    // -------------------------------------------------------------------------
+    // Auth retry helper
+    // -------------------------------------------------------------------------
+
+    /**
+     * Executes {@code action}, retrying up to {@code maxAuthRetries} times on
+     * {@link IntegrationAuthenticationException}.  The last attempt re-throws
+     * the exception so callers (and ultimately the controller) can handle it.
+     */
+    private void withAuthRetry(Runnable action) {
+        IntegrationAuthenticationException lastException = null;
+        for (int attempt = 0; attempt <= maxAuthRetries; attempt++) {
+            try {
+                action.run();
+                return;
+            } catch (IntegrationAuthenticationException e) {
+                lastException = e;
+                log.warn("Auth falhou (tentativa {}/{}). Motivo: {}",
+                        attempt + 1, maxAuthRetries + 1, e.getMessage());
+            }
+        }
+        assert lastException != null;
+        throw lastException;
     }
 }
