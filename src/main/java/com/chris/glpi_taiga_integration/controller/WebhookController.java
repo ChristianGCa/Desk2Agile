@@ -10,17 +10,35 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * Controller responsável por receber webhooks do GLPI e Taiga.
+ */
 @RestController
 @RequestMapping("/api/webhook")
 public class WebhookController {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookController.class);
+
+    /**
+     * Serviço responsável pelo processamento da integração.
+     */
     private final IntegrationService integrationService;
 
+    /**
+     * Injeta o serviço de integração.
+     *
+     * @param integrationService serviço de integração
+     */
     public WebhookController(IntegrationService integrationService) {
         this.integrationService = integrationService;
     }
 
+    /**
+     * Recebe webhooks enviados pelo GLPI.
+     *
+     * @param payload payload recebido do GLPI
+     * @return resposta HTTP do processamento
+     */
     @PostMapping(value = "/glpi", consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_OCTET_STREAM_VALUE})
     public ResponseEntity<String> receiveWebhookGlpi(@RequestBody GlpiWebhookPayload payload) {
         log.info("ROTA /glpi - Payload recebido");
@@ -42,6 +60,12 @@ public class WebhookController {
         }
     }
 
+    /**
+     * Recebe webhooks enviados pelo Taiga.
+     *
+     * @param payload payload recebido do Taiga
+     * @return resposta HTTP do processamento
+     */
     @PostMapping("/taiga")
     public ResponseEntity<String> receiveWebhookTaiga(@RequestBody(required = false) TaigaWebhookPayload payload) {
         log.info("ROTA /taiga - Payload recebido");
@@ -69,3 +93,4 @@ public class WebhookController {
         }
     }
 }
+

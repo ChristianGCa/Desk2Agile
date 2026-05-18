@@ -7,6 +7,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+
+import lombok.Setter;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -14,6 +17,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+@Setter
 @Component
 @Order(1)
 @ConfigurationProperties(prefix = "security.webhook")
@@ -33,18 +37,10 @@ public class IpAllowlistFilter extends OncePerRequestFilter {
      */
     private boolean trustProxy = false;
 
-    public void setAllowedIps(List<String> allowedIps) {
-        this.allowedIps = allowedIps;
-    }
-
-    public void setTrustProxy(boolean trustProxy) {
-        this.trustProxy = trustProxy;
-    }
-
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain) throws ServletException, IOException {
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
 
         String requestUri = request.getRequestURI();
 

@@ -1,7 +1,11 @@
 package com.chris.glpi_taiga_integration.config;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+@Setter
+@Getter
 @ConfigurationProperties(prefix = "glpi.entities")
 public class GlpiEntitiesProperties {
 
@@ -10,11 +14,4 @@ public class GlpiEntitiesProperties {
      */
     private String rootName = "Entidade raiz";
 
-    public String getRootName() {
-        return rootName;
-    }
-
-    public void setRootName(String rootName) {
-        this.rootName = rootName;
-    }
 }

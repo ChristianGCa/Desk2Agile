@@ -4,8 +4,13 @@ import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+@Setter
+@Getter
 @ConfigurationProperties(prefix = "taiga.routing")
 public class TaigaRoutingProperties {
 
@@ -31,49 +36,12 @@ public class TaigaRoutingProperties {
      */
     private List<EntityMapping> entityMappings = new ArrayList<>();
 
-    public String getFallbackProjectName() {
-        return fallbackProjectName;
-    }
-
-    public void setFallbackProjectName(String fallbackProjectName) {
-        this.fallbackProjectName = fallbackProjectName;
-    }
-
-    public Map<String, String> getEntityProjectSlugs() {
-        return entityProjectSlugs;
-    }
-
-    public void setEntityProjectSlugs(Map<String, String> entityProjectSlugs) {
-        this.entityProjectSlugs = entityProjectSlugs;
-    }
-
-    public List<EntityMapping> getEntityMappings() {
-        return entityMappings;
-    }
-
-    public void setEntityMappings(List<EntityMapping> entityMappings) {
-        this.entityMappings = entityMappings;
-    }
-
+    @Setter
+    @Getter
     public static class EntityMapping {
 
         private String glpiEntityName;
         private String taigaProjectName;
 
-        public String getGlpiEntityName() {
-            return glpiEntityName;
-        }
-
-        public void setGlpiEntityName(String glpiEntityName) {
-            this.glpiEntityName = glpiEntityName;
-        }
-
-        public String getTaigaProjectName() {
-            return taigaProjectName;
-        }
-
-        public void setTaigaProjectName(String taigaProjectName) {
-            this.taigaProjectName = taigaProjectName;
-        }
     }
 }
