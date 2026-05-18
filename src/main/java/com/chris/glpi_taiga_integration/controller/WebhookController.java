@@ -52,8 +52,8 @@ public class WebhookController {
         }
 
         String type = payload.type();
-        if (!"issue".equals(type) && !"userstory".equals(type)) {
-            log.info("ROTA /taiga - Evento ignorado: tipo '{}' não tratado.", type);
+        if (!type.equals("issue") && !type.equals("userstory")) {
+            log.info("ROTA /taiga - Evento ignorado pois não é issue ou userstory: tipo '{}'", type);
             return ResponseEntity.ok("Evento ignorado: tipo '" + type + "' não tratado.");
         }
 

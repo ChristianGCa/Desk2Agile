@@ -55,19 +55,13 @@ public class GlpiIntegrationService {
         this.pluginFieldsProperties = pluginFieldsProperties;
     }
 
-    // ------------------------------------------------------------------
-    // Roteamento de paths do plugin Fields
-    //
-    // O GLPI gera o endpoint do plugin Fields a partir do nome do bloco
-    // removendo acentos, espaços e especiais (tudo minúsculo).
-    //
+    // O GLPI gera o endpoint do plugin Fields a partir do nome do bloco.
+    // Ele remove acentos, espaços e especiais.
     // Exemplos:
-    //   "Taiga"                → /PluginFieldsTickettaiga
-    //   "Progresso do chamado" → /PluginFieldsTicketprogressodochamado
-    // ------------------------------------------------------------------
-
+    // "Taiga" - /PluginFieldsTickettaiga
+    // "Progresso do chamado" - /PluginFieldsTicketprogressodochamado
     private String buildPluginPathNormalized(String blockName) {
-        // GLPI descarta caracteres não-ASCII (não transliteram via NFD).
+        // GLPI descarta caracteres não-ASCII.
         String sanitized = blockName
                 .toLowerCase(Locale.ROOT)
                 .replaceAll("[^a-z0-9]", "");
@@ -80,9 +74,7 @@ public class GlpiIntegrationService {
 
     private boolean isResourceNotFound(RestClientResponseException e) {
         String response = e.getResponseBodyAsString();
-        return e.getStatusCode().is4xxClientError()
-                && response != null
-                && response.contains("ERROR_RESOURCE_NOT_FOUND_NOR_COMMONDBTM");
+        return e.getStatusCode().is4xxClientError() && response.contains("ERROR_RESOURCE_NOT_FOUND_NOR_COMMONDBTM");
     }
 
     private String pluginFieldsDiagnosticMessage(String blockName, List<String> triedPaths) {
@@ -98,9 +90,7 @@ public class GlpiIntegrationService {
                 + "Verifique se o nome do bloco e dos campos no application.yaml correspondem ao GLPI.";
     }
 
-    // ------------------------------------------------------------------
     // Operações genéricas de CRUD no plugin Fields
-    // ------------------------------------------------------------------
 
     private List<Map<String, Object>> fetchPluginRecords(
             String blockName, String sessionToken, int offset, int limit, String operationLabel) {
@@ -128,7 +118,7 @@ public class GlpiIntegrationService {
                 }
                 throw new GlpiPluginFieldsException(
                         "Erro ao consultar plugin Fields no GLPI durante " + operationLabel
-                                + ". Status HTTP=" + e.getRawStatusCode()
+                                + ". Status HTTP=" + e.getStatusCode()
                                 + ", resposta=" + e.getResponseBodyAsString(),
                         e);
             }
@@ -162,7 +152,7 @@ public class GlpiIntegrationService {
                 }
                 throw new GlpiPluginFieldsException(
                         "Erro ao criar registro no plugin Fields durante " + operationLabel
-                                + ". Status HTTP=" + e.getRawStatusCode()
+                                + ". Status HTTP=" + e.getStatusCode()
                                 + ", resposta=" + e.getResponseBodyAsString(),
                         e);
             }
@@ -171,8 +161,7 @@ public class GlpiIntegrationService {
         throw new GlpiPluginFieldsException(pluginFieldsDiagnosticMessage(blockName, triedPaths), lastException);
     }
 
-    private void updatePluginRecord(
-            String blockName, Long recordId, Map<String, Object> body, String sessionToken, String operationLabel) {
+    private void updatePluginRecord(String blockName, Long recordId, Map<String, Object> body, String sessionToken, String operationLabel) {
         List<String> triedPaths = new ArrayList<>();
         RestClientResponseException lastException = null;
 
@@ -197,7 +186,7 @@ public class GlpiIntegrationService {
                 }
                 throw new GlpiPluginFieldsException(
                         "Erro ao atualizar registro no plugin Fields durante " + operationLabel
-                                + ". Status HTTP=" + e.getRawStatusCode()
+                                + ". Status HTTP=" + e.getStatusCode()
                                 + ", resposta=" + e.getResponseBodyAsString(),
                         e);
             }
@@ -206,9 +195,7 @@ public class GlpiIntegrationService {
         throw new GlpiPluginFieldsException(pluginFieldsDiagnosticMessage(blockName, triedPaths), lastException);
     }
 
-    // ------------------------------------------------------------------
-    // Sessão GLPI
-    // ------------------------------------------------------------------
+    // Sessão do GLPI
 
     @Cacheable(value = GLPI_SESSION_CACHE, key = CACHE_KEY)
     public String initSession() {
@@ -264,42 +251,52 @@ public class GlpiIntegrationService {
         }
     }
 
-    // ------------------------------------------------------------------
-    // Bloco privado "Taiga" — campos: ID Taiga, Link Taiga
-    // Rota: /PluginFieldsTickettaiga
-    // ------------------------------------------------------------------
+    // Bloco privado (ID da Issue no Taiga e Link)
 
-    public Optional<GlpiPluginFieldsRecord> getPluginFieldsRecord(Long ticketId, String sessionToken) {
-        log.info("GLPI SERVICE - Buscando registro do bloco Taiga para ticket {}.", ticketId);
-        String blockName = pluginFieldsProperties.getPrivateTicketStatusBlockName();
+    public Optional<GlpiPluginFieldsRecord> getPluginFieldsRecord(
+            Long ticketId,
+            String sessionToken) {
+
+        log.info(
+                "GLPI SERVICE - Buscando registro do bloco Taiga para ticket {}.",
+                ticketId);
+
+        String blockName =
+                pluginFieldsProperties.getPrivateTicketStatusBlockName();
 
         int offset = 0;
         int limit = 100;
-        boolean hasMoreRecords = true;
 
-        while (hasMoreRecords) {
-            List<Map<String, Object>> records = fetchPluginRecords(
-                    blockName, sessionToken, offset, limit, "consulta do bloco Taiga");
+        while (true) {
+
+            List<Map<String, Object>> records =
+                    fetchPluginRecords(
+                            blockName,
+                            sessionToken,
+                            offset,
+                            limit,
+                            "consulta do bloco Taiga");
 
             if (records == null || records.isEmpty()) {
-                break;
+                return Optional.empty();
             }
 
-            Optional<GlpiPluginFieldsRecord> record = records.stream()
-                    .map(this::toPrivateRecord)
-                    .filter(r -> ticketId.equals(r.itemsId()))
-                    .findFirst();
+            for (Map<String, Object> rawRecord : records) {
 
-            if (record.isPresent()) {
-                return record;
+                GlpiPluginFieldsRecord record =
+                        toPrivateRecord(rawRecord);
+
+                if (ticketId.equals(record.itemsId())) {
+                    return Optional.of(record);
+                }
+            }
+
+            if (records.size() < limit) {
+                return Optional.empty();
             }
 
             offset += limit;
-            if (records.size() < limit) {
-                hasMoreRecords = false;
-            }
         }
-        return Optional.empty();
     }
 
     public void updateGlpiTicket(Long ticketId, Long taigaIssueId, String taigaIssueUrl, String sessionToken) {
@@ -365,9 +362,6 @@ public class GlpiIntegrationService {
         return Optional.empty();
     }
 
-    /**
-     * Cria registro no bloco "Taiga" com ID Taiga e Link Taiga.
-     */
     public void createPluginFields(Long ticketId, Long taigaIssueId, String taigaIssueUrl, String sessionToken) {
         createPluginRecord(
                 pluginFieldsProperties.getPrivateTicketStatusBlockName(),
@@ -376,9 +370,6 @@ public class GlpiIntegrationService {
                 "criação de registro no bloco Taiga");
     }
 
-    /**
-     * Atualiza registro no bloco "Taiga" com ID Taiga e Link Taiga.
-     */
     public void updatePluginFields(Long ticketId, Long recordId, Long taigaIssueId, String taigaIssueUrl, String sessionToken) {
         updatePluginRecord(
                 pluginFieldsProperties.getPrivateTicketStatusBlockName(),
@@ -388,10 +379,7 @@ public class GlpiIntegrationService {
                 "atualização de registro no bloco Taiga");
     }
 
-    // ------------------------------------------------------------------
-    // Bloco público "Progresso do chamado" — campos: Status do chamado, Data prevista
-    // Rota: /PluginFieldsTicketprogressodochamado
-    // ------------------------------------------------------------------
+    // Bloco público (Status do chamado e Data de conclusão prevista)
 
     public Optional<GlpiPluginFieldsRecord> getExternalProgressRecord(Long ticketId, String sessionToken) {
         log.info("GLPI SERVICE - Buscando registro Progresso do chamado para ticket {}.", ticketId);
@@ -472,9 +460,7 @@ public class GlpiIntegrationService {
         return pluginFieldsProperties.getStatusInicial();
     }
 
-    // ------------------------------------------------------------------
     // Tickets e Entidades
-    // ------------------------------------------------------------------
 
     public Optional<Long> getTicketEntityId(Long ticketId, String sessionToken) {
         GlpiTicketResponse ticket = restClient.get()
@@ -500,9 +486,7 @@ public class GlpiIntegrationService {
         return Optional.ofNullable(entity);
     }
 
-    // ------------------------------------------------------------------
     // Mapeamento de registros brutos
-    // ------------------------------------------------------------------
 
     private GlpiPluginFieldsRecord toPrivateRecord(Map<String, Object> rawRecord) {
         Long id = getRequiredLong(rawRecord, "id");
@@ -518,9 +502,7 @@ public class GlpiIntegrationService {
         return new GlpiPluginFieldsRecord(id, itemsId, null, null);
     }
 
-    // ------------------------------------------------------------------
     // Montagem dos corpos das requisições
-    // ------------------------------------------------------------------
 
     /**
      * Corpo do POST/PUT para o bloco "Taiga".
@@ -562,9 +544,7 @@ public class GlpiIntegrationService {
         return isoDate.substring(8, 10) + "/" + isoDate.substring(5, 7) + "/" + isoDate.substring(0, 4);
     }
 
-    // ------------------------------------------------------------------
     // Helpers
-    // ------------------------------------------------------------------
 
     private Long getRequiredLong(Map<String, Object> rawRecord, String fieldName) {
         Object value = rawRecord.get(fieldName);

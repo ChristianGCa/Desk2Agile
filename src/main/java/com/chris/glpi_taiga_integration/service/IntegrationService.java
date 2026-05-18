@@ -22,6 +22,7 @@ public class IntegrationService {
     private static final Logger log = LoggerFactory.getLogger(IntegrationService.class);
     private static final String ID_TAIGA_NULL = "0";
     private static final String CONFIG_WILDCARD = "*";
+    // Variável de quantidade de locks para concorrência
     private static final int LOCK_STRIPES = 64;
 
     private final TaigaIntegrationService taigaIntegrationService;
@@ -52,69 +53,161 @@ public class IntegrationService {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // GLPI webhook
-    // -------------------------------------------------------------------------
+    // GLPI Webhook
 
     public void processGlpiWebhook(GlpiWebhookPayload payload) {
-        var item = payload.item();
+        GlpiItem item = payload.item();
+
         if (!shouldSendTicketToTaiga(item)) {
-            String category = (item.category() != null && item.category().name() != null)
-                    ? item.category().name()
-                    : "";
-            log.debug(
-                    "GLPI - Ignorado: categoria='{}' (gatilho categoria={}); técnico gatilho={} sem match em assigned.",
-                    category,
-                    formatCategoryTriggerForLog(),
-                    formatAssigneeTriggerForLog());
+            logIgnoredTicket(item);
             return;
         }
 
         Long ticketId = item.id();
-        Object lock = locks[(ticketId.hashCode() & 0x7FFFFFFF) % LOCK_STRIPES];
+        int lockIndex = (ticketId.hashCode() & Integer.MAX_VALUE) % LOCK_STRIPES;
 
-        synchronized (lock) {
-            withAuthRetry(() -> doProcessGlpiWebhook(item, ticketId));
+        synchronized (locks[lockIndex]) {
+            processGlpiWebhookWithRetry(item, ticketId);
         }
     }
 
+    private void processGlpiWebhookWithRetry(GlpiItem item, Long ticketId) {
+        withAuthRetry(new Runnable() {
+            @Override
+            public void run() {
+                doProcessGlpiWebhook(item, ticketId);
+            }
+        });
+    }
+
+    private void logIgnoredTicket(GlpiItem item) {
+        String category = "";
+
+        if (item.category() != null && item.category().name() != null) {
+            category = item.category().name();
+        }
+
+        log.debug(
+                "GLPI - Ignorado: categoria='{}' (gatilho categoria={}); técnico gatilho={} sem match em assigned.",
+                category,
+                formatCategoryTriggerForLog(),
+                formatAssigneeTriggerForLog());
+    }
+
+    // Se a categoria bate ou o designado também, envia ao Taiga :)
     private boolean shouldSendTicketToTaiga(GlpiItem item) {
         return categoryMatches(item) || assigneeMatches(item);
     }
 
     private boolean categoryMatches(GlpiItem item) {
-        String cfg = categoryThatSendToTaiga == null ? "" : categoryThatSendToTaiga.trim();
-        if (cfg.isEmpty()) return false;
-        if (CONFIG_WILDCARD.equals(cfg)) return true;
-        if (item.category() == null || item.category().name() == null) return false;
-        String category = item.category().name();
-        return !category.isBlank() && category.equalsIgnoreCase(cfg);
+        if (categoryThatSendToTaiga == null) {
+            return false;
+        }
+        String configCategory = categoryThatSendToTaiga.trim();
+        if (configCategory.isEmpty()) {
+            return false;
+        }
+        if (CONFIG_WILDCARD.equals(configCategory)) {
+            return true;
+        }
+        if (item.category() == null) {
+            return false;
+        }
+        String itemCategory = item.category().name();
+        if (itemCategory == null || itemCategory.isBlank()) {
+            return false;
+        }
+        return itemCategory.equalsIgnoreCase(configCategory);
     }
 
     private boolean assigneeMatches(GlpiItem item) {
-        String wanted = assigneeThatSendToTaiga == null ? "" : assigneeThatSendToTaiga.trim();
-        if (wanted.isEmpty()) return false;
-        if (CONFIG_WILDCARD.equals(wanted)) return true;
-        List<GlpiTeamMember> team = item.team();
-        for (GlpiTeamMember member : team) {
-            if (member == null || member.role() == null
-                    || !"assigned".equalsIgnoreCase(member.role().trim())) continue;
-            if (member.name() != null && wanted.equalsIgnoreCase(member.name().trim())) return true;
-            if (member.displayName() != null && wanted.equalsIgnoreCase(member.displayName().trim())) return true;
-            if (member.realName() != null && wanted.equalsIgnoreCase(member.realName().trim())) return true;
-            if (member.firstName() != null && wanted.equalsIgnoreCase(member.firstName().trim())) return true;
+        if (assigneeThatSendToTaiga == null) {
+            return false;
         }
+
+        String wantedAssignee = assigneeThatSendToTaiga.trim();
+
+        if (wantedAssignee.isEmpty()) {
+            return false;
+        }
+
+        if (CONFIG_WILDCARD.equals(wantedAssignee)) {
+            return true;
+        }
+
+        List<GlpiTeamMember> team = item.team();
+
+        for (GlpiTeamMember member : team) {
+            if (!isAssignedMember(member)) {
+                continue;
+            }
+
+            if (matchesAssignee(member.name(), wantedAssignee)) {
+                return true;
+            }
+
+            if (matchesAssignee(member.displayName(), wantedAssignee)) {
+                return true;
+            }
+
+            if (matchesAssignee(member.realName(), wantedAssignee)) {
+                return true;
+            }
+
+            if (matchesAssignee(member.firstName(), wantedAssignee)) {
+                return true;
+            }
+        }
+
         return false;
     }
 
+    private boolean isAssignedMember(GlpiTeamMember member) {
+        if (member == null) {
+            return false;
+        }
+
+        if (member.role() == null) {
+            return false;
+        }
+
+        return "assigned".equalsIgnoreCase(member.role().trim());
+    }
+
+    private boolean matchesAssignee(String value, String wantedAssignee) {
+        if (value == null) {
+            return false;
+        }
+
+        return wantedAssignee.equalsIgnoreCase(value.trim());
+    }
+
     private String formatCategoryTriggerForLog() {
-        if (categoryThatSendToTaiga == null || categoryThatSendToTaiga.isBlank()) return "(desativado)";
-        return "'" + categoryThatSendToTaiga.trim() + "'";
+        if (categoryThatSendToTaiga == null) {
+            return "(desativado)";
+        }
+
+        String value = categoryThatSendToTaiga.trim();
+
+        if (value.isBlank()) {
+            return "(desativado)";
+        }
+
+        return "'" + value + "'";
     }
 
     private String formatAssigneeTriggerForLog() {
-        if (assigneeThatSendToTaiga == null || assigneeThatSendToTaiga.isBlank()) return "(desativado)";
-        return "'" + assigneeThatSendToTaiga.trim() + "'";
+        if (assigneeThatSendToTaiga == null) {
+            return "(desativado)";
+        }
+
+        String value = assigneeThatSendToTaiga.trim();
+
+        if (value.isBlank()) {
+            return "(desativado)";
+        }
+
+        return "'" + value + "'";
     }
 
     private void doProcessGlpiWebhook(GlpiItem item, Long ticketId) {
@@ -123,35 +216,75 @@ public class IntegrationService {
         Optional<GlpiPluginFieldsRecord> record =
                 glpiIntegrationService.getPluginFieldsRecord(ticketId, sessionToken);
 
-        if (record.isPresent()) {
-            String idTaiga = record.get().taigaIdValue();
-            if (idTaiga != null && !idTaiga.isBlank() && !idTaiga.equals(ID_TAIGA_NULL)) {
-                log.info("GLPI - Ticket {} já possui Issue no Taiga ({}).", ticketId, idTaiga);
-                return;
-            }
+        if (ticketAlreadyIntegrated(record, ticketId)) {
+            return;
         }
 
         String taigaToken = taigaIntegrationService.authenticateInTaiga();
-        String targetProjectSlug = projectRoutingService.resolveTaigaProjectSlugForTicket(ticketId, sessionToken);
-        var project = taigaIntegrationService.getProjectBySlug(targetProjectSlug, taigaToken);
 
-        var taigaResponse = taigaIntegrationService.createIssueOnTaiga(
-                project.id(), item.name(), item.content(), taigaToken);
+        String projectSlug =
+                projectRoutingService.resolveTaigaProjectSlugForTicket(ticketId, sessionToken);
 
-        String taigaIssueUrl = taigaIntegrationService.buildTaigaIssueUrl(targetProjectSlug, taigaResponse.ref());
-        glpiIntegrationService.updateGlpiTicket(ticketId, taigaResponse.id(), taigaIssueUrl, sessionToken);
+        var project =
+                taigaIntegrationService.getProjectBySlug(projectSlug, taigaToken);
+
+        var taigaIssue =
+                taigaIntegrationService.createIssueOnTaiga(
+                        project.id(),
+                        item.name(),
+                        item.content(),
+                        taigaToken);
+
+        String taigaIssueUrl =
+                taigaIntegrationService.buildTaigaIssueUrl(
+                        projectSlug,
+                        taigaIssue.ref());
+
+        glpiIntegrationService.updateGlpiTicket(
+                ticketId,
+                taigaIssue.id(),
+                taigaIssueUrl,
+                sessionToken);
+
         glpiIntegrationService.syncExternalProgress(
                 ticketId,
                 glpiIntegrationService.getInitialStatusExternalProgress(),
                 null,
                 sessionToken);
 
-        log.info("GLPI - Integração concluída para Ticket {}: Taiga ID {}", ticketId, taigaResponse.id());
+        log.info(
+                "GLPI - Integração concluída para Ticket {}: Taiga ID {}",
+                ticketId,
+                taigaIssue.id());
     }
 
-    // -------------------------------------------------------------------------
-    // Taiga webhook
-    // -------------------------------------------------------------------------
+    private boolean ticketAlreadyIntegrated(
+            Optional<GlpiPluginFieldsRecord> record,
+            Long ticketId) {
+
+        if (record.isEmpty()) {
+            return false;
+        }
+
+        String taigaId = record.get().taigaIdValue();
+
+        if (taigaId == null || taigaId.isBlank()) {
+            return false;
+        }
+
+        if (ID_TAIGA_NULL.equals(taigaId)) {
+            return false;
+        }
+
+        log.info(
+                "GLPI - Ticket {} já possui Issue no Taiga ({})",
+                ticketId,
+                taigaId);
+
+        return true;
+    }
+
+    // Taiga
 
     public void processTaigaWebhook(TaigaWebhookPayload payload) {
         if ("create".equals(payload.action()) && "issue".equals(payload.type())) {
@@ -171,25 +304,54 @@ public class IntegrationService {
         }
     }
 
-    // -- issue events ---------------------------------------------------------
-
     private void processTaigaIssueEvent(TaigaWebhookPayload payload, TaigaIssueData data) {
+
         if (isPromotionEvent(payload)) {
-            Long newUserStoryId = extractNewUserStoryId(payload);
-            if (newUserStoryId == null) {
-                log.warn("TAIGA - Promoção detectada para issue {} mas nenhum novo ID de história encontrado.",
-                        data.id());
-                return;
-            }
-            log.info("TAIGA - Issue {} promovida para história {}.", data.id(), newUserStoryId);
-            withAuthRetry(() -> doHandleIssuePromotion(data.id(), newUserStoryId));
-        } else {
-            if (data.id() == null || data.status() == null) {
-                log.warn("TAIGA - Payload de issue inválido recebido.");
-                return;
-            }
-            withAuthRetry(() -> doProcessTaigaIssueUpdate(data));
+            processPromotionEvent(payload, data);
+            return;
         }
+
+        if (data.id() == null || data.status() == null) {
+            log.warn("TAIGA - Payload de issue inválido recebido.");
+            return;
+        }
+
+        withAuthRetry(new Runnable() {
+
+            @Override
+            public void run() {
+                doProcessTaigaIssueUpdate(data);
+            }
+
+        });
+    }
+
+    private void processPromotionEvent(
+            TaigaWebhookPayload payload,
+            TaigaIssueData data) {
+
+        Long newUserStoryId = extractNewUserStoryId(payload);
+
+        if (newUserStoryId == null) {
+            log.warn(
+                    "TAIGA - Promoção detectada para issue {} mas nenhum novo ID de história encontrado.",
+                    data.id());
+            return;
+        }
+
+        log.info(
+                "TAIGA - Issue {} promovida para história {}.",
+                data.id(),
+                newUserStoryId);
+
+        withAuthRetry(new Runnable() {
+
+            @Override
+            public void run() {
+                doHandleIssuePromotion(data.id(), newUserStoryId);
+            }
+
+        });
     }
 
     private boolean isPromotionEvent(TaigaWebhookPayload payload) {
@@ -199,13 +361,27 @@ public class IntegrationService {
     }
 
     private Long extractNewUserStoryId(TaigaWebhookPayload payload) {
-        TaigaPromotedToChange promotedTo = payload.change().diff().promotedTo();
-        List<Long> from = promotedTo.from() != null ? promotedTo.from() : List.of();
-        List<Long> to = promotedTo.to() != null ? promotedTo.to() : List.of();
-        return to.stream()
-                .filter(id -> !from.contains(id))
-                .findFirst()
-                .orElse(null);
+
+        TaigaPromotedToChange promotedTo =
+                payload.change().diff().promotedTo();
+
+        List<Long> from = promotedTo.from();
+        if (from == null) {
+            from = List.of();
+        }
+
+        List<Long> to = promotedTo.to();
+        if (to == null) {
+            to = List.of();
+        }
+
+        for (Long id : to) {
+            if (!from.contains(id)) {
+                return id;
+            }
+        }
+
+        return null;
     }
 
     private void doHandleIssuePromotion(Long issueId, Long userStoryId) {
@@ -227,8 +403,18 @@ public class IntegrationService {
         }
 
         var statusResponse = taigaIntegrationService.getUserStoryStatus(us.statusId(), taigaToken);
-        String statusNome = statusResponse != null ? statusResponse.name() : String.valueOf(us.statusId());
-        String dataPrevista = us.dueDate() != null ? us.dueDate().split("T")[0] : null;
+
+        String statusNome = String.valueOf(us.statusId());
+
+        if (statusResponse != null) {
+            statusNome = statusResponse.name();
+        }
+
+        String dataPrevista = null;
+
+        if (us.dueDate() != null) {
+            dataPrevista = us.dueDate().split("T")[0];
+        }
 
         glpiIntegrationService.syncExternalProgress(ticketId, statusNome, dataPrevista, sessionToken);
         log.info("TAIGA - Ticket {} atualizado via promoção: história={}, status='{}', dataPrevista={}.",
@@ -236,111 +422,187 @@ public class IntegrationService {
     }
 
     private void doProcessTaigaIssueUpdate(TaigaIssueData issue) {
-        // Se a issue já foi promovida para história de usuário,
-        // ignora atualizações da Issue para não sobrescrever dados da história.
+
         if (issue.promotedTo() != null && !issue.promotedTo().isEmpty()) {
-            log.info("TAIGA - Issue {} já promovida para história(s) {}. Atualização ignorada.",
-                    issue.id(), issue.promotedTo());
+            log.info(
+                    "TAIGA - Issue {} já promovida para história(s) {}. Atualização ignorada.",
+                    issue.id(),
+                    issue.promotedTo());
             return;
         }
 
         String sessionToken = glpiIntegrationService.initSession();
 
-        Optional<Long> glpiTicketId = glpiIntegrationService.getTicketByIdTaiga(issue.id(), sessionToken);
+        Optional<Long> glpiTicketId =
+                glpiIntegrationService.getTicketByIdTaiga(
+                        issue.id(),
+                        sessionToken);
+
         if (glpiTicketId.isEmpty()) {
-            log.warn("TAIGA - Nenhum ticket GLPI encontrado para issue {}.", issue.id());
+            log.warn(
+                    "TAIGA - Nenhum ticket GLPI encontrado para issue {}.",
+                    issue.id());
             return;
         }
 
         Long ticketId = glpiTicketId.get();
         String statusNome = issue.status().name();
 
-        // URL já está gravada no bloco privado "Taiga" do GLPI — sem chamada extra ao Taiga.
         Optional<GlpiPluginFieldsRecord> record =
-                glpiIntegrationService.getPluginFieldsRecord(ticketId, sessionToken);
+                glpiIntegrationService.getPluginFieldsRecord(
+                        ticketId,
+                        sessionToken);
 
-        String taigaIssueUrl = record.map(GlpiPluginFieldsRecord::taigaLinkValue).orElse(null);
-        if (taigaIssueUrl == null || taigaIssueUrl.isBlank()) {
-            // Fallback: reconstrói via API do Taiga se o campo não estiver gravado.
-            log.warn("TAIGA - Link não encontrado no GLPI para ticket {}. Reconstruindo via API.", ticketId);
-            String taigaToken = taigaIntegrationService.authenticateInTaiga();
-            var issueDetails = taigaIntegrationService.getIssueDetails(issue.id(), taigaToken);
-            var project = taigaIntegrationService.getProjectById(issueDetails.projectId(), taigaToken);
-            taigaIssueUrl = taigaIntegrationService.buildTaigaIssueUrl(project.slug(), issue.ref());
-        }
+        String taigaIssueUrl = null;
 
         if (record.isPresent()) {
+            taigaIssueUrl = record.get().taigaLinkValue();
+        }
+        if (taigaIssueUrl == null || taigaIssueUrl.isBlank()) {
+            log.warn(
+                    "TAIGA - Link não encontrado no GLPI para ticket {}. Reconstruindo via API.",
+                    ticketId);
+            String taigaToken =
+                    taigaIntegrationService.authenticateInTaiga();
+            var issueDetails =
+                    taigaIntegrationService.getIssueDetails(
+                            issue.id(),
+                            taigaToken);
+            var project =
+                    taigaIntegrationService.getProjectById(
+                            issueDetails.projectId(),
+                            taigaToken);
+            taigaIssueUrl =
+                    taigaIntegrationService.buildTaigaIssueUrl(
+                            project.slug(),
+                            issue.ref());
+        }
+        if (record.isPresent()) {
             glpiIntegrationService.updatePluginFields(
-                    ticketId, record.get().id(), issue.id(), taigaIssueUrl, sessionToken);
+                    ticketId,
+                    record.get().id(),
+                    issue.id(),
+                    taigaIssueUrl,
+                    sessionToken);
         } else {
             glpiIntegrationService.createPluginFields(
-                    ticketId, issue.id(), taigaIssueUrl, sessionToken);
+                    ticketId,
+                    issue.id(),
+                    taigaIssueUrl,
+                    sessionToken);
         }
 
-        String dataPrevista = issue.dueDate() != null ? issue.dueDate().split("T")[0] : null;
+        String dataPrevista = null;
 
-        glpiIntegrationService.syncExternalProgress(ticketId, statusNome, dataPrevista, sessionToken);
-        log.info("TAIGA - Ticket {} atualizado via issue: status='{}', dataPrevista={}.",
-                ticketId, statusNome, dataPrevista);
+        if (issue.dueDate() != null) {
+            dataPrevista = issue.dueDate().split("T")[0];
+        }
+
+        glpiIntegrationService.syncExternalProgress(
+                ticketId,
+                statusNome,
+                dataPrevista,
+                sessionToken);
+
+        log.info(
+                "TAIGA - Ticket {} atualizado via issue: status='{}', dataPrevista={}.",
+                ticketId,
+                statusNome,
+                dataPrevista);
     }
 
-    // -- userstory events -----------------------------------------------------
-
     private void processTaigaUserStoryEvent(TaigaIssueData data) {
+
         if (data.id() == null || data.generatedFromIssue() == null) {
-            log.info("TAIGA - História {} sem issue de origem, ignorando.", data.id());
+            log.info(
+                    "TAIGA - História {} sem issue de origem, ignorando.",
+                    data.id());
             return;
         }
+
         if (data.status() == null) {
             log.warn("TAIGA - Payload de história inválido (status ausente).");
             return;
         }
-        withAuthRetry(() -> doProcessUserStoryUpdate(data));
+
+        withAuthRetry(new Runnable() {
+
+            @Override
+            public void run() {
+                doProcessUserStoryUpdate(data);
+            }
+
+        });
     }
 
     private void doProcessUserStoryUpdate(TaigaIssueData us) {
-        String sessionToken = glpiIntegrationService.initSession();
 
-        // Localiza o ticket pelo ID da issue original que gerou esta história.
+        String sessionToken =
+                glpiIntegrationService.initSession();
+
         Optional<Long> glpiTicketId =
-                glpiIntegrationService.getTicketByIdTaiga(us.generatedFromIssue(), sessionToken);
+                glpiIntegrationService.getTicketByIdTaiga(
+                        us.generatedFromIssue(),
+                        sessionToken);
+
         if (glpiTicketId.isEmpty()) {
-            log.warn("TAIGA - Nenhum ticket GLPI para issue {} (origem da história {}).",
-                    us.generatedFromIssue(), us.id());
+
+            log.warn(
+                    "TAIGA - Nenhum ticket GLPI para issue {} (origem da história {}).",
+                    us.generatedFromIssue(),
+                    us.id());
+
             return;
         }
 
         Long ticketId = glpiTicketId.get();
         String statusNome = us.status().name();
-        String dataPrevista = us.dueDate() != null ? us.dueDate().split("T")[0] : null;
 
-        glpiIntegrationService.syncExternalProgress(ticketId, statusNome, dataPrevista, sessionToken);
-        log.info("TAIGA - Ticket {} atualizado via história {}: status='{}', dataPrevista={}.",
-                ticketId, us.id(), statusNome, dataPrevista);
+        String dataPrevista = null;
+
+        if (us.dueDate() != null) {
+            dataPrevista = us.dueDate().split("T")[0];
+        }
+
+        glpiIntegrationService.syncExternalProgress(
+                ticketId,
+                statusNome,
+                dataPrevista,
+                sessionToken);
+
+        log.info(
+                "TAIGA - Ticket {} atualizado via história {}: status='{}', dataPrevista={}.",
+                ticketId,
+                us.id(),
+                statusNome,
+                dataPrevista);
     }
 
-    // -------------------------------------------------------------------------
-    // Auth retry helper
-    // -------------------------------------------------------------------------
-
-    /**
-     * Executes {@code action}, retrying up to {@code maxAuthRetries} times on
-     * {@link IntegrationAuthenticationException}.  The last attempt re-throws
-     * the exception so callers (and ultimately the controller) can handle it.
-     */
     private void withAuthRetry(Runnable action) {
+
         IntegrationAuthenticationException lastException = null;
+
         for (int attempt = 0; attempt <= maxAuthRetries; attempt++) {
+
             try {
+
                 action.run();
                 return;
+
             } catch (IntegrationAuthenticationException e) {
+
                 lastException = e;
-                log.warn("Auth falhou (tentativa {}/{}). Motivo: {}",
-                        attempt + 1, maxAuthRetries + 1, e.getMessage());
+
+                log.warn(
+                        "Auth falhou (tentativa {}/{}). Motivo: {}",
+                        attempt + 1,
+                        maxAuthRetries + 1,
+                        e.getMessage());
             }
         }
-        assert lastException != null;
-        throw lastException;
+
+        if (lastException != null) {
+            throw lastException;
+        }
     }
 }
