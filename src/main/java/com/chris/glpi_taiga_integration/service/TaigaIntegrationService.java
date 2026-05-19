@@ -70,7 +70,7 @@ public class TaigaIntegrationService {
      */
     @Cacheable(value = TAIGA_TOKEN_CACHE, key = CACHE_KEY)
     public String authenticateInTaiga() {
-        log.info("TAIGA SERVICE - Autenticando no Taiga (nova requisição)...");
+        log.debug("TAIGA SERVICE - Autenticando no Taiga (nova requisição)...");
         TaigaAuthRequest authRequest = new TaigaAuthRequest(AUTH_TYPE_NORMAL, taigaUsername, taigaPassword);
 
         TaigaAuthResponse authResponse = restClient.post()
@@ -84,7 +84,7 @@ public class TaigaIntegrationService {
             throw new RuntimeException("Falha na autenticação: token não retornado pelo Taiga.");
         }
 
-        log.info("TAIGA SERVICE - Autenticação Taiga concluída (token em cache).");
+        log.debug("TAIGA SERVICE - Autenticação Taiga concluída (token em cache).");
         return authResponse.authToken();
     }
 
@@ -96,7 +96,7 @@ public class TaigaIntegrationService {
         Optional.ofNullable(cacheManager.getCache(TAIGA_TOKEN_CACHE))
                 .ifPresent(cache -> {
                     cache.clear();
-                    log.info("TAIGA SERVICE - Cache de token Taiga invalidado.");
+                    log.debug("TAIGA SERVICE - Cache de token Taiga invalidado.");
                 });
     }
 
@@ -165,7 +165,7 @@ public class TaigaIntegrationService {
      */
     @Cacheable(value = "taigaProjects", key = "'slug:' + #slug")
     public TaigaProjectResponse getProjectBySlug(String slug, String token) {
-        log.info("TAIGA SERVICE - Buscando projeto por slug='{}'.", slug);
+        log.debug("TAIGA SERVICE - Buscando projeto por slug='{}'.", slug);
         return restClient.get()
                 .uri(taigaApiUrl + "/projects/by_slug?slug=" + slug)
                 .header("Authorization", "Bearer " + token)
@@ -182,7 +182,7 @@ public class TaigaIntegrationService {
      */
     @Cacheable(value = "taigaProjects", key = "'id:' + #projectId")
     public TaigaProjectResponse getProjectById(Long projectId, String token) {
-        log.info("TAIGA SERVICE - Buscando projeto por id={}.", projectId);
+        log.debug("TAIGA SERVICE - Buscando projeto por id={}.", projectId);
         return restClient.get()
                 .uri(taigaApiUrl + "/projects/" + projectId)
                 .header("Authorization", "Bearer " + token)
@@ -198,7 +198,7 @@ public class TaigaIntegrationService {
      * @return Objeto com detalhes da issue.
      */
     public TaigaIssueDetailsResponse getIssueDetails(Long issueId, String token) {
-        log.info("TAIGA SERVICE - Buscando detalhes da issue id={}.", issueId);
+        log.debug("TAIGA SERVICE - Buscando detalhes da issue id={}.", issueId);
         return restClient.get()
                 .uri(taigaApiUrl + "/issues/" + issueId)
                 .header("Authorization", "Bearer " + token)
@@ -214,7 +214,7 @@ public class TaigaIntegrationService {
      * @return Objeto com detalhes da user story.
      */
     public TaigaUserStoryDetailsResponse getUserStoryDetails(Long userStoryId, String token) {
-        log.info("TAIGA SERVICE - Buscando detalhes da história id={}.", userStoryId);
+        log.debug("TAIGA SERVICE - Buscando detalhes da história id={}.", userStoryId);
         return restClient.get()
                 .uri(taigaApiUrl + "/userstories/" + userStoryId)
                 .header("Authorization", "Bearer " + token)
@@ -230,7 +230,7 @@ public class TaigaIntegrationService {
      * @return Objeto contendo o nome e propriedades do status.
      */
     public TaigaUserStoryStatusResponse getUserStoryStatus(Long statusId, String token) {
-        log.info("TAIGA SERVICE - Buscando nome do status de história id={}.", statusId);
+        log.debug("TAIGA SERVICE - Buscando nome do status de história id={}.", statusId);
         return restClient.get()
                 .uri(taigaApiUrl + "/userstory-statuses/" + statusId)
                 .header("Authorization", "Bearer " + token)

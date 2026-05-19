@@ -65,7 +65,7 @@ public class ProjectRoutingService {
         }
 
         if (entityName.equalsIgnoreCase(glpiEntitiesProperties.getRootName())) {
-            log.info("ROUTING - Ticket {} está na entidade raiz ('{}'). Usando fallback='{}'.",
+            log.debug("ROUTING - Ticket {} está na entidade raiz ('{}'). Usando fallback='{}'.",
                     ticketId, entityName, fallback);
             return fallback;
         }
@@ -76,7 +76,7 @@ public class ProjectRoutingService {
             return fallback;
         }
 
-        log.info("ROUTING - Ticket {}: entidade '{}' -> projeto slug='{}'.", ticketId, entityName, mapped);
+        log.debug("ROUTING - Ticket {}: entidade '{}' -> projeto slug='{}'.", ticketId, entityName, mapped);
         return mapped;
     }
 

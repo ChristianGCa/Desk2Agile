@@ -55,11 +55,11 @@ public class GlpiIntegrationService {
         this.pluginFieldsProperties = pluginFieldsProperties;
     }
     /**
-    * O GLPI gera o endpoint do plugin Fields a partir do nome do bloco.
-    * Ele remove acentos, espaços e especiais.
-    * Exemplos:
-    * "Taiga" - /PluginFieldsTickettaiga
-    * "Progresso do chamado" - /PluginFieldsTicketprogressodochamado
+     * O GLPI gera o endpoint do plugin Fields a partir do nome do bloco.
+     * Ele remove acentos, espaços e especiais.
+     * Exemplos:
+     * "Taiga" - /PluginFieldsTickettaiga
+     * "Progresso do chamado" - /PluginFieldsTicketprogressodochamado
      */
 
     private String buildPluginPathNormalized(String blockName) {
@@ -227,7 +227,7 @@ public class GlpiIntegrationService {
      */
     @Cacheable(value = GLPI_SESSION_CACHE, key = CACHE_KEY)
     public String initSession() {
-        log.info("GLPI SERVICE - Iniciando nova sessão no GLPI...");
+        log.debug("GLPI SERVICE - Iniciando nova sessão no GLPI...");
         GlpiSessionResponse sessionResponse = restClient.get()
                 .uri(glpiApiUrl + "/initSession")
                 .header("App-Token", glpiAppToken)
@@ -239,7 +239,7 @@ public class GlpiIntegrationService {
             throw new RuntimeException("Falha ao iniciar sessão no GLPI: session_token não retornado.");
         }
 
-        log.info("GLPI SERVICE - Sessão GLPI iniciada (token em cache).");
+        log.debug("GLPI SERVICE - Sessão GLPI iniciada (token em cache).");
         return sessionResponse.sessionToken();
     }
 
@@ -250,7 +250,7 @@ public class GlpiIntegrationService {
         Optional.ofNullable(cacheManager.getCache(GLPI_SESSION_CACHE))
                 .ifPresent(cache -> {
                     cache.clear();
-                    log.info("GLPI SERVICE - Cache de sessão GLPI invalidado.");
+                    log.debug("GLPI SERVICE - Cache de sessão GLPI invalidado.");
                 });
     }
 
@@ -258,7 +258,7 @@ public class GlpiIntegrationService {
      * Encerra a sessão ativa no servidor do GLPI e limpa o cache local.
      */
     public void closeGlpiSession(String sessionToken) {
-        log.info("GLPI SERVICE - Encerrando sessão GLPI no servidor...");
+        log.debug("GLPI SERVICE - Encerrando sessão GLPI no servidor...");
         try {
             restClient.get()
                     .uri(glpiApiUrl + "/killSession")
@@ -266,7 +266,7 @@ public class GlpiIntegrationService {
                     .header("App-Token", glpiAppToken)
                     .retrieve()
                     .toBodilessEntity();
-            log.info("GLPI SERVICE - Sessão GLPI encerrada no servidor.");
+            log.debug("GLPI SERVICE - Sessão GLPI encerrada no servidor.");
         } catch (Exception e) {
             log.warn("GLPI SERVICE - Não foi possível encerrar a sessão GLPI: {}", e.getMessage());
         } finally {
@@ -280,7 +280,7 @@ public class GlpiIntegrationService {
      */
     @PreDestroy
     public void onShutdown() {
-        log.info("GLPI SERVICE - Shutdown detectado. Encerrando sessão GLPI...");
+        log.debug("GLPI SERVICE - Shutdown detectado. Encerrando sessão GLPI...");
         try {
             String token = initSession();
             closeGlpiSession(token);
@@ -299,7 +299,7 @@ public class GlpiIntegrationService {
             Long ticketId,
             String sessionToken) {
 
-        log.info(
+        log.debug(
                 "GLPI SERVICE - Buscando registro do bloco Taiga para ticket {}.",
                 ticketId);
 
@@ -346,7 +346,7 @@ public class GlpiIntegrationService {
      * e insere ou altera o registro correspondente no plugin Fields.
      */
     public void updateGlpiTicket(Long ticketId, Long taigaIssueId, String taigaIssueUrl, String sessionToken) {
-        log.info("GLPI SERVICE - Atualizando chamado no GLPI (ticket={})...", ticketId);
+        log.debug("GLPI SERVICE - Atualizando chamado no GLPI (ticket={})...", ticketId);
         updateGlpiTaigaId(ticketId, taigaIssueId, sessionToken);
 
         Optional<GlpiPluginFieldsRecord> record = getPluginFieldsRecord(ticketId, sessionToken);
@@ -361,7 +361,7 @@ public class GlpiIntegrationService {
      * Atualiza o campo customizado nativo ou mapeado no payload do Ticket principal do GLPI.
      */
     public void updateGlpiTaigaId(Long ticketId, Long taigaIssueId, String sessionToken) {
-        log.info("GLPI SERVICE - Atualizando campo ID Taiga no ticket {}...", ticketId);
+        log.debug("GLPI SERVICE - Atualizando campo ID Taiga no ticket {}...", ticketId);
         restClient.put()
                 .uri(glpiApiUrl + "/Ticket/" + ticketId)
                 .header("Session-Token", sessionToken)
@@ -377,7 +377,7 @@ public class GlpiIntegrationService {
      * Executa varredura paginada com filtro em memória.
      */
     public Optional<Long> getTicketByIdTaiga(Long taigaIssueId, String sessionToken) {
-        log.info("GLPI SERVICE - Buscando chamado pelo campo {}={} (com paginação).",
+        log.debug("GLPI SERVICE - Buscando chamado pelo campo {}={} (com paginação).",
                 pluginFieldsProperties.privateIdTaigaApiField(), taigaIssueId);
         String blockName = pluginFieldsProperties.getPrivateTicketStatusBlockName();
 
@@ -438,7 +438,7 @@ public class GlpiIntegrationService {
      * Recupera dados do bloco público "Progresso do chamado" associados ao ticket. Varredura paginada em memória.
      */
     public Optional<GlpiPluginFieldsRecord> getExternalProgressRecord(Long ticketId, String sessionToken) {
-        log.info("GLPI SERVICE - Buscando registro Progresso do chamado para ticket {}.", ticketId);
+        log.debug("GLPI SERVICE - Buscando registro Progresso do chamado para ticket {}.", ticketId);
         String blockName = pluginFieldsProperties.getPublicTicketStatusBlockName();
 
         int offset = 0;
