@@ -81,9 +81,12 @@ GLPI_USER_TOKEN=user_token
 
 WEBHOOK_ALLOWED_IP_GLPI=172.18.0.6
 WEBHOOK_ALLOWED_IP_TAIGA=172.19.0.8
+
+# Log em arquivo — deixe vazio ou remova para desativar
+LOG_FILE=/app/logs/app.log
 ```
 
-## Configuração principal (`application.yaml`)
+## Configuração principal (`config/application.yaml`)
 
 Ajuste principalmente:
 
@@ -97,6 +100,39 @@ Ajuste principalmente:
 - `glpi.plugin-fields.public-fields.*`: nomes exatos dos campos do bloco público.
 - `glpi.plugin-fields.status-inicial`: status gravado no bloco público ao criar a issue.
 - `security.webhook.allowed-ips`: IPs autorizados a chamar os webhooks.
+
+## Logs
+
+O projeto gera dois arquivos de log independentes, ambos na pasta `./logs/` (mapeada via volume no Docker):
+
+| Arquivo | Conteúdo |
+|---|---|
+| `app.log` | Eventos gerais de operação (INFO) |
+| `integration_failures.log` | Somente erros de integração |
+
+**Para ativar o log geral em arquivo**, defina `LOG_FILE` no `.env`:
+
+```env
+LOG_FILE=/app/logs/app.log
+```
+
+**Para desativar**, deixe vazio ou remova a linha:
+
+```env
+LOG_FILE=
+```
+
+O arquivo `integration_failures.log` é sempre gerado, independente do `LOG_FILE`.
+
+Para diagnóstico, o nível de log pode ser elevado para `DEBUG` em `config/application.yaml`:
+
+```yaml
+logging:
+  level:
+    com:
+      chris:
+        glpi_taiga_integration: DEBUG
+```
 
 ## Executar localmente
 
