@@ -1,8 +1,21 @@
+FROM eclipse-temurin:21-jdk-alpine AS builder
+
+WORKDIR /app
+
+COPY .mvn/ .mvn/
+COPY mvnw ./
+COPY pom.xml ./
+
+RUN ./mvnw dependency:go-offline -B
+
+COPY src ./src
+RUN ./mvnw clean package -DskipTests
+
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
-COPY target/glpi-taiga-integration-0.0.1-SNAPSHOT.jar app.jar
+COPY --from=builder /app/target/*.jar app.jar
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
 RUN chmod +x /app/docker-entrypoint.sh \

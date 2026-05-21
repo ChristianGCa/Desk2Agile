@@ -44,8 +44,6 @@ glpi:
     public-ticket-status-block-name: Progresso do chamado
 
     # Nomes dos campos dentro dos blocos do plugin Fields do GLPI
-    # O sistema converte automaticamente para o nome da API do GLPI
-    # Exemplo: "ID Taiga" - "idtaigafield"
     private-fields:
       id-taiga: ID Taiga
       link-taiga: Link Taiga
@@ -64,24 +62,36 @@ glpi:
 security:
   webhook:
     # IPs autorizados a chamar /api/webhook/*
-    # Lista vazia = qualquer IP pode chamar
-    # Para restringir, comente o "*" e descomente as linhas abaixo.
-    # Os IPs são colocados no .env
+    # Lista vazia ou "*" = qualquer IP pode chamar
+    # Para restringir, comente o "*" e liste os IPs permitidos
     allowed-ips:
       - "*"
       #- ${WEBHOOK_ALLOWED_IP_GLPI}
       #- ${WEBHOOK_ALLOWED_IP_TAIGA}
 
-# SSL
-# Preferível configurar via .env (SSL_SKIP_VERIFY=true/false)
 ssl:
   skip-verify: ${SSL_SKIP_VERIFY:false}
 
+# ─────────────────────────────────────────
 # LOGS
+# ─────────────────────────────────────────
 logging:
   level:
     com:
       chris:
-        glpi_taiga_integration: INFO   # troque para DEBUG para diagnóstico
+        glpi_taiga_integration: DEBUG   # troque para DEBUG para diagnóstico detalhado
+
+  # Log em arquivo — ativado no Docker via variável LOG_FILE.
+  # Para desativar: remova LOG_FILE do .env ou deixe em branco (LOG_FILE=).
+  file:
+    name: ${LOG_FILE:/app/logs/app.log}
+
+  # Rotação automática
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 10        # dias de retenção
+      total-size-cap: 200MB
+
   integration:
     failure-file: /app/logs/integration_failures.log

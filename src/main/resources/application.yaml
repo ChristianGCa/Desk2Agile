@@ -48,6 +48,21 @@ logging:
   level:
     com:
       chris:
-        glpi_taiga_integration: DEBUG
+        glpi_taiga_integration: INFO
+
+  # Log em arquivo desativado por padrão em desenvolvimento.
+  # Para ativar, defina a variável de ambiente LOG_FILE com o caminho desejado.
+  # Exemplo: LOG_FILE=./logs/app.log
+  file:
+    name: ${LOG_FILE:}
+
+  # Rotação automática
+  # só tem efeito quando LOG_FILE está definido
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 30 # dias de retenção
+      total-size-cap: 200MB
+
   integration:
     failure-file: integration_failures.log
