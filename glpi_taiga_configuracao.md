@@ -289,6 +289,8 @@ Usuário > Minhas configurações > Senhas e chaves de acesso
 
 # Webhooks do GLPI
 
+O middleware valida um header `Authorization` em todas as requisições vindas do GLPI. Configure os headers personalizados conforme abaixo.
+
 ## 11. Webhook de Criação
 
 ### Caminho
@@ -310,6 +312,18 @@ Configurar > Webhooks > Adicionar
 | Salvar corpo da resposta | Sim |
 | Log no histórico | Sim |
 
+### Header personalizado de autenticação
+
+Na seção de **Headers HTTP personalizados** do webhook, adicione:
+
+| Header | Valor |
+|---|---|
+| `Authorization` | `Bearer TOKEN-GLPI` |
+
+> Substitua `TOKEN-GLPI` por um valor seguro e único. Esse mesmo valor deve ser configurado em `WEBHOOK_GLPI_TOKEN` no `.env` do middleware.
+>
+> O middleware rejeita com `401 Não autorizado` qualquer requisição do GLPI que não envie esse header ou que envie um token diferente.
+
 ---
 
 ## 12. Webhook de Atualização
@@ -326,6 +340,16 @@ Configurar > Webhooks > Adicionar
 | Método HTTP | POST |
 | Salvar corpo da resposta | Sim |
 | Log no histórico | Sim |
+
+### Header personalizado de autenticação
+
+Adicione o mesmo header configurado no webhook de criação:
+
+| Header | Valor |
+|---|---|
+| `Authorization` | `Bearer TOKEN-GLPI` |
+
+> Use o mesmo token em todos os webhooks do GLPI. O middleware não diferencia os tokens por evento — apenas valida se o token recebido bate com o configurado.
 
 ---
 
@@ -382,9 +406,21 @@ Settings > Integrations > Webhooks
 |---|---|
 | Name | Atualizar GLPI |
 | URL | https://middleware.exemplo.local/api/webhook/taiga |
-| Secret key | Não necessária |
+| Secret key | `chave-secreta` |
 
-Configure o webhook em **cada projeto** que deve sincronizar status com o GLPI.
+> **A secret key é obrigatória.** O Taiga usa esse valor para assinar cada requisição com HMAC-SHA1 e envia a assinatura no header `X-Taiga-Webhook-Signature`. O middleware recalcula a assinatura com o body recebido e rejeita com `401` se não bater.
+>
+> Use um valor longo e aleatório (mínimo 32 caracteres recomendado). O mesmo valor deve ser configurado em `WEBHOOK_TAIGA_SECRET` no `.env` do middleware.
+>
+> Configure o webhook em **cada projeto** que deve sincronizar status com o GLPI.
+
+### Como o Taiga gera a assinatura
+
+```
+X-Taiga-Webhook-Signature = HMAC-SHA1(secret_key, body_cru_utf8)
+```
+
+O resultado é enviado em hexadecimal. O middleware replica esse cálculo para verificar a autenticidade.
 
 ---
 
@@ -416,3 +452,23 @@ taiga:
 ```
 
 O middleware busca a entidade do chamado no GLPI, localiza o mapeamento correspondente e cria a issue no projeto Taiga configurado. Se não encontrar mapeamento, usa o projeto `fallback-project-name`.
+
+---
+
+# Variáveis de ambiente
+
+Referência completa das variáveis do arquivo `.env`:
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `TAIGA_URL` | Sim | URL base da API do Taiga (ex: `http://taiga.local/api/v1`) |
+| `TAIGA_WEB_URL` | Sim | URL base web do Taiga (usada para montar links de issues) |
+| `TAIGA_USERNAME` | Sim | Usuário do Taiga usado pelo middleware |
+| `TAIGA_PASSWORD` | Sim | Senha do usuário Taiga |
+| `GLPI_URL` | Sim | URL da API REST do GLPI (ex: `http://glpi.local/apirest.php`) |
+| `GLPI_APP_TOKEN` | Sim | App token do cliente de API do GLPI |
+| `GLPI_USER_TOKEN` | Sim | User token do usuário GLPI |
+| `WEBHOOK_GLPI_TOKEN` | Recomendado | Token Bearer enviado pelo GLPI no header `Authorization` |
+| `WEBHOOK_TAIGA_SECRET` | Recomendado | Secret key configurada nos webhooks do Taiga (HMAC-SHA1) |
+| `SSL_SKIP_VERIFY` | Não | `true` para aceitar certificados autoassinados (padrão: `false`) |
+| `LOG_FILE` | Não | Caminho do arquivo de log (ex: `./logs/app.log`); vazio = sem log em arquivo |

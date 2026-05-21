@@ -15,11 +15,12 @@ Middleware em `Spring Boot` para integrar `GLPI` e `Taiga` via webhooks.
 ## Fluxo de integração
 
 1. Chamado é criado/atualizado no GLPI.
-2. Middleware valida categoria/técnico e verifica se já existe vínculo com issue do Taiga.
-3. Se necessário, cria issue no projeto Taiga correspondente (ou fallback `Diversos`).
-4. Middleware grava no bloco **"Taiga"** (privado) o ID e o link da issue criada.
-5. Middleware grava no bloco **"Progresso do chamado"** (público) o status inicial.
-6. Quando o status da issue muda no Taiga, o webhook do Taiga atualiza o bloco **"Progresso do chamado"** no GLPI.
+2. Middleware valida o token Bearer do GLPI e, em seguida, categoria/técnico do chamado.
+3. Verifica se já existe vínculo com issue do Taiga.
+4. Se necessário, cria issue no projeto Taiga correspondente (ou fallback `Diversos`).
+5. Middleware grava no bloco **"Taiga"** (privado) o ID e o link da issue criada.
+6. Middleware grava no bloco **"Progresso do chamado"** (público) o status inicial.
+7. Quando o status da issue muda no Taiga, o webhook do Taiga (validado por HMAC-SHA1) atualiza o bloco **"Progresso do chamado"** no GLPI.
 
 ## Blocos do Plugin Fields
 
@@ -62,12 +63,59 @@ Esse arquivo descreve a criação de:
 - Entidades e categorias no GLPI
 - Blocos e campos do `Plugin Fields` (bloco "Taiga" e bloco "Progresso do chamado")
 - API legada e tokens do GLPI
-- Webhooks do GLPI e do Taiga
+- Webhooks do GLPI e do Taiga, incluindo configuração de autenticação
 - Projetos no Taiga (incluindo o projeto de fallback `Diversos`)
+
+## Segurança dos webhooks
+
+O middleware valida a autenticidade de cada webhook recebido antes de qualquer processamento.
+
+### GLPI → Middleware
+
+O GLPI envia um header `Authorization` em todas as requisições de webhook. O middleware rejeita com `401` qualquer requisição sem esse header ou com token incorreto.
+
+**Como funciona:**
+
+```
+GLPI ──► POST /api/webhook/glpi
+         Header: Authorization: Bearer <WEBHOOK_GLPI_TOKEN>
+```
+
+O valor configurado em `WEBHOOK_GLPI_TOKEN` deve ser idêntico ao valor `Bearer TOKEN` definido nos webhooks do GLPI.
+
+### Taiga → Middleware
+
+O Taiga assina cada requisição de webhook com HMAC-SHA1 usando a *secret key* configurada no projeto. O middleware recalcula a assinatura com o body recebido e rejeita com `401` se não bater.
+
+**Como funciona:**
+
+```
+Taiga ──► POST /api/webhook/taiga
+          Header: X-Taiga-Webhook-Signature: <hmac-sha1-hex>
+
+Middleware calcula: HMAC-SHA1(WEBHOOK_TAIGA_SECRET, body_cru)
+Compara com o header recebido.
+```
+
+**Se as variáveis estiverem em branco**, a validação é desabilitada e um aviso é registrado no log. Nunca deixe em branco em produção.
+
+### Allowlist de IPs (opcional, camada adicional)
+
+Além da validação de token/assinatura, é possível restringir os IPs aceitos:
+
+```yaml
+security:
+  webhook:
+    allowed-ips:
+      - "10.80.25.10"   # IP do GLPI
+      - "10.80.25.11"   # IP do Taiga
+```
+
+Use `"*"` (padrão) para desabilitar a restrição por IP.
 
 ## Variáveis de ambiente (`.env`)
 
-Use um arquivo `.env` na raiz com:
+Use um arquivo `.env` na raiz com (consulte `.env.example` para o template completo):
 
 ```env
 TAIGA_WEB_URL=http://127.0.0.1:9000/
@@ -79,14 +127,12 @@ GLPI_URL=http://localhost:8080/apirest.php
 GLPI_APP_TOKEN=app_token
 GLPI_USER_TOKEN=user_token
 
-WEBHOOK_ALLOWED_IP_GLPI=172.18.0.6
-WEBHOOK_ALLOWED_IP_TAIGA=172.19.0.8
-
-# Log em arquivo — deixe vazio ou remova para desativar
-LOG_FILE=/app/logs/app.log
+# Segurança dos webhooks
+WEBHOOK_GLPI_TOKEN=TOKEN-GLPI
+WEBHOOK_TAIGA_SECRET=chave-secreta
 ```
 
-## Configuração principal (`config/application.yaml`)
+## Configuração principal (`application.yaml`)
 
 Ajuste principalmente:
 
@@ -99,40 +145,9 @@ Ajuste principalmente:
 - `glpi.plugin-fields.private-fields.*`: nomes exatos dos campos do bloco privado.
 - `glpi.plugin-fields.public-fields.*`: nomes exatos dos campos do bloco público.
 - `glpi.plugin-fields.status-inicial`: status gravado no bloco público ao criar a issue.
+- `security.webhook.glpi-token`: token Bearer esperado do GLPI (via `WEBHOOK_GLPI_TOKEN`).
+- `security.webhook.taiga-secret`: secret key do Taiga para validação HMAC-SHA1 (via `WEBHOOK_TAIGA_SECRET`).
 - `security.webhook.allowed-ips`: IPs autorizados a chamar os webhooks.
-
-## Logs
-
-O projeto gera dois arquivos de log independentes, ambos na pasta `./logs/` (mapeada via volume no Docker):
-
-| Arquivo | Conteúdo |
-|---|---|
-| `app.log` | Eventos gerais de operação (INFO) |
-| `integration_failures.log` | Somente erros de integração |
-
-**Para ativar o log geral em arquivo**, defina `LOG_FILE` no `.env`:
-
-```env
-LOG_FILE=/app/logs/app.log
-```
-
-**Para desativar**, deixe vazio ou remova a linha:
-
-```env
-LOG_FILE=
-```
-
-O arquivo `integration_failures.log` é sempre gerado, independente do `LOG_FILE`.
-
-Para diagnóstico, o nível de log pode ser elevado para `DEBUG` em `config/application.yaml`:
-
-```yaml
-logging:
-  level:
-    com:
-      chris:
-        glpi_taiga_integration: DEBUG
-```
 
 ## Executar localmente
 
@@ -144,5 +159,7 @@ Aplicação inicia, por padrão, em `http://localhost:8081`.
 
 ## Endpoints de webhook
 
-- `POST /api/webhook/glpi`
-- `POST /api/webhook/taiga`
+| Endpoint | Autenticação |
+|---|---|
+| `POST /api/webhook/glpi` | Header `Authorization: Bearer <token>` |
+| `POST /api/webhook/taiga` | Header `X-Taiga-Webhook-Signature` (HMAC-SHA1) |

@@ -69,6 +69,13 @@ security:
       #- ${WEBHOOK_ALLOWED_IP_GLPI}
       #- ${WEBHOOK_ALLOWED_IP_TAIGA}
 
+    # Token Bearer enviado pelo GLPI no header Authorization
+    # Deve bater com o valor configurado nos webhooks do GLPI
+    glpi-token: ${WEBHOOK_GLPI_TOKEN:}
+    # Secret key configurada nos webhooks do Taiga
+    # Usada para verificar HMAC-SHA1 do body (X-Taiga-Webhook-Signature)
+    taiga-secret: ${WEBHOOK_TAIGA_SECRET:}
+
 ssl:
   skip-verify: ${SSL_SKIP_VERIFY:false}
 

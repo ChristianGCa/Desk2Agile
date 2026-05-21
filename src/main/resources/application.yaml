@@ -22,7 +22,7 @@ glpi:
     app-token: ${GLPI_APP_TOKEN:app_token}
     user-token: ${GLPI_USER_TOKEN:user_token}
     category-that-send-to-taiga: Desenvolvimento
-    assignee-that-send-to-taiga: "tech"
+    assignee-that-send-to-taiga: tech
   plugin-fields:
     private-ticket-status-block-name: Taiga
     public-ticket-status-block-name: Progresso do chamado
@@ -40,6 +40,8 @@ security:
   webhook:
     allowed-ips:
       - "*"
+    glpi-token: ${WEBHOOK_GLPI_TOKEN:}
+    taiga-secret: ${WEBHOOK_TAIGA_SECRET:}
 
 ssl:
   skip-verify: ${SSL_SKIP_VERIFY:false}
