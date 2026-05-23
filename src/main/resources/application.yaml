@@ -24,7 +24,7 @@ glpi:
     category-that-send-to-taiga: Desenvolvimento
     assignee-that-send-to-taiga: tech
   plugin-fields:
-    private-ticket-status-block-name: Taiga
+    private-ticket-status-block-name: Informações do Taiga
     public-ticket-status-block-name: Progresso do chamado
     private-fields:
       id-taiga: ID Taiga

@@ -26,7 +26,7 @@ Middleware em `Spring Boot` para integrar `GLPI` e `Taiga` via webhooks.
 
 | Bloco | Visibilidade | Campos |
 |---|---|---|
-| **Taiga** | Equipe (privado) | ID Taiga, Link Taiga |
+| **Informações do Taiga** | Equipe (privado) | ID Taiga, Link Taiga |
 | **Progresso do chamado** | Todos (público) | Status do chamado, Data prevista |
 
 Os nomes dos campos são convertidos automaticamente para o formato da API do plugin Fields (sem acentos, sem espaços, com sufixo `field`). Exemplos:

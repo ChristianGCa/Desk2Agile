@@ -166,7 +166,7 @@ Isso impede edição manual do conteúdo.
 
 ---
 
-## 6. Bloco Privado: "Taiga"
+## 6. Bloco Privado: "Informações do Taiga"
 
 Este bloco armazena os dados internos da integração com o Taiga e é visível apenas para a equipe.
 
@@ -180,7 +180,7 @@ Este bloco armazena os dados internos da integração com o Taiga e é visível 
 | Ativo | Sim |
 | Tipo de item associado | Assistência - Chamados |
 
-> O rótulo deve ser exatamente `Taiga` para corresponder ao valor padrão de `glpi.plugin-fields.private-ticket-status-block-name` no `application.yaml`.
+> O rótulo deve ser exatamente `Informações do Taiga` para corresponder ao valor padrão de `glpi.plugin-fields.private-ticket-status-block-name` no `application.yaml`.
 
 ### Permissões
 
@@ -192,7 +192,7 @@ Este bloco armazena os dados internos da integração com o Taiga e é visível 
 
 ---
 
-## 7. Campos do bloco "Taiga"
+## 7. Campos do bloco "Informações do Taiga"
 
 ### Campo: ID Taiga
 

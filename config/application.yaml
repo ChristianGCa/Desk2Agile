@@ -50,7 +50,7 @@ glpi:
 
     public-fields:
       status-chamado: Status do chamado
-      data-prevista: Conclusão prevista
+      data-prevista: Data prevista
 
     # Valor inicial do campo "Status do chamado" ao criar issue
     status-inicial: New
