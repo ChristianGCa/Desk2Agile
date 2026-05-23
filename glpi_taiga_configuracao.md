@@ -175,7 +175,7 @@ Este bloco armazena os dados internos da integração com o Taiga e é visível 
 | Campo | Valor |
 |---|---|
 | Entidades filhas | Marcado |
-| Rótulo | Taiga |
+| Rótulo | Informações do Taiga |
 | Tipo | Adicionar aba |
 | Ativo | Sim |
 | Tipo de item associado | Assistência - Chamados |
@@ -225,8 +225,8 @@ Este bloco armazena os dados internos da integração com o Taiga e é visível 
 |---|---|---|---|---|
 | Progresso do chamado | Todos | Status do chamado | Texto (múltiplas linhas) | `statusdochamadofield` |
 | Progresso do chamado | Todos | Data prevista | Data | `dataprevistafield` |
-| Taiga | Equipe | ID Taiga | Número | `idtaigafield` |
-| Taiga | Equipe | Link Taiga | URL | `linktaigafield` |
+| Informações do Taiga | Equipe | ID Taiga | Número | `idtaigafield` |
+| Informações do Taiga | Equipe | Link Taiga | URL | `linktaigafield` |
 
 > Os nomes na API são gerados automaticamente pelo middleware a partir dos rótulos configurados no `application.yaml`: remove acentos, espaços e caracteres especiais, converte para minúsculas e adiciona o sufixo `field`. Se você usar rótulos diferentes dos padrões acima, atualize `glpi.plugin-fields.*` no `application.yaml` de acordo.
 
