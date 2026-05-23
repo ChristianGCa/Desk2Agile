@@ -1,0 +1,104 @@
+server:
+  port: 8081
+
+taiga:
+  api:
+    url: ${TAIGA_URL}
+    username: ${TAIGA_USERNAME}
+    password: ${TAIGA_PASSWORD}
+  web:
+    url: ${TAIGA_WEB_URL}
+  routing:
+    # Projeto Taiga de destino quando o chamado não bate com nenhuma entidade abaixo
+    fallback-project-name: Diversos
+
+    # Se o chamado vier da entidade X, vai para o projeto Y.
+    # Os nomes devem ser exatamente como aparecem no GLPI e no Taiga.
+    # Adicione quantas entradas precisar
+    entity-mappings:
+      - glpi-entity-name: Serviço 1
+        taiga-project-name: Primeiro Serviço
+      - glpi-entity-name: Diversos
+        taiga-project-name: Diversos
+
+glpi:
+  api:
+    url: ${GLPI_URL}
+    app-token: ${GLPI_APP_TOKEN}
+    user-token: ${GLPI_USER_TOKEN}
+
+    # Categoria de chamado que dispara criação de issue no Taiga
+    # Use "*" para qualquer categoria; deixe vazio para desligar este gatilho
+    category-that-send-to-taiga: Desenvolvimento
+
+    # Nome do usuário atribuído que dispara criação de issue
+    # Dispara mesmo fora da categoria acima
+    # Use "*" para qualquer técnico; deixe vazio para desligar este gatilho
+    assignee-that-send-to-taiga: tech
+
+  plugin-fields:
+    # Nome do bloco visível apenas para a equipe (contém ID Taiga e Link Taiga)
+    private-ticket-status-block-name: Informações do Taiga
+
+    # Nome do bloco visível para todos (contém Status e Data prevista)
+    public-ticket-status-block-name: Progresso do chamado
+
+    # Nomes dos campos dentro dos blocos do plugin Fields do GLPI
+    private-fields:
+      id-taiga: ID Taiga
+      link-taiga: Link Taiga
+
+    public-fields:
+      status-chamado: Status do chamado
+      data-prevista: Data prevista
+
+    # Valor inicial do campo "Status do chamado" ao criar issue
+    status-inicial: New
+
+  entities:
+    # Nome da entidade raiz do GLPI
+    root-name: Entidade raiz
+
+security:
+  webhook:
+    # IPs autorizados a chamar /api/webhook/*
+    # Lista vazia ou "*" = qualquer IP pode chamar
+    # Para restringir, comente o "*" e liste os IPs permitidos
+    allowed-ips:
+      - "*"
+      #- ${WEBHOOK_ALLOWED_IP_GLPI}
+      #- ${WEBHOOK_ALLOWED_IP_TAIGA}
+
+    # Token Bearer enviado pelo GLPI no header Authorization
+    # Deve bater com o valor configurado nos webhooks do GLPI
+    glpi-token: ${WEBHOOK_GLPI_TOKEN:}
+    # Secret key configurada nos webhooks do Taiga
+    # Usada para verificar HMAC-SHA1 do body (X-Taiga-Webhook-Signature)
+    taiga-secret: ${WEBHOOK_TAIGA_SECRET:}
+
+ssl:
+  skip-verify: ${SSL_SKIP_VERIFY:false}
+
+# ─────────────────────────────────────────
+# LOGS
+# ─────────────────────────────────────────
+logging:
+  level:
+    com:
+      chris:
+        glpi_taiga_integration: INFO   # troque para DEBUG para diagnóstico detalhado
+
+  # Log em arquivo - ativado no Docker via variável LOG_FILE.
+  # Para desativar: remova LOG_FILE do .env ou deixe em branco (LOG_FILE=).
+  file:
+    name: ${LOG_FILE:/app/logs/app.log}
+
+  # Rotação automática
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 10 # dias de retenção
+      total-size-cap: 200MB
+
+  integration:
+    failure-file: /app/logs/integration_failures.log

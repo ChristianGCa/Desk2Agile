@@ -3,92 +3,68 @@ server:
 
 taiga:
   api:
-    url: ${TAIGA_URL}
-    username: ${TAIGA_USERNAME}
-    password: ${TAIGA_PASSWORD}
+    url: ${TAIGA_URL:http://localhost:9000/api/v1}
+    username: ${TAIGA_USERNAME:taiga}
+    password: ${TAIGA_PASSWORD:taiga}
   web:
-    url: ${TAIGA_WEB_URL}
+    url: ${TAIGA_WEB_URL:http://localhost:9000}
   routing:
-    # Nome do projeto Taiga onde os chamados sem entidades irão
     fallback-project-name: Diversos
-    
-    # Mapeamento de entidades do GLPI e Projetos Taiga.
-    # Por exemplo:
-    #
-    # - glpi-entity-name: Serviço 1
-    # - taiga-project-name: Projeto 1
-    #
-    # Isso significa que use um chamado for do "Serviço 1",
-    # uma Issue será criada no projeto "Projeto 1" no Taiga.
     entity-mappings:
       - glpi-entity-name: Serviço 1
         taiga-project-name: Serviço 1
       - glpi-entity-name: Serviço 2
         taiga-project-name: Serviço 2
+
 glpi:
   api:
-    url: ${GLPI_URL}
-    app-token: ${GLPI_APP_TOKEN}
-    user-token: ${GLPI_USER_TOKEN}
-    # Categoria que dispara criação de issues no Taiga (comparação sem diferenciar maiúsculas).
-    # Use "*" para qualquer categoria; vazio = este gatilho desligado.
+    url: ${GLPI_URL:http://localhost:8080/apirest.php}
+    app-token: ${GLPI_APP_TOKEN:app_token}
+    user-token: ${GLPI_USER_TOKEN:user_token}
     category-that-send-to-taiga: Desenvolvimento
-
-    # Login GLPI (campo "name" ou display_name em team com role "assigned").
-    # Dispara mesmo fora da categoria acima. "*" = ignora filtro de técnico (sempre casando este ramo); vazio = desligado.
-    assignee-that-send-to-taiga: "tech"
-
+    assignee-that-send-to-taiga: tech
   plugin-fields:
-    # -----------------------------------------------------------------------
-    # Bloco "Taiga" (visível apenas para a equipe)
-    # Contém: ID Taiga, Link Taiga
-    # Rota derivada: /PluginFieldsTickettaiga
-    # -----------------------------------------------------------------------
-    private-ticket-status-block-name: Taiga
-
-    # -----------------------------------------------------------------------
-    # Bloco "Progresso do chamado" (visível para todos)
-    # Contém: Status do chamado, Data prevista
-    # Rota derivada: /PluginFieldsTicketprogressodochamado
-    # -----------------------------------------------------------------------
+    private-ticket-status-block-name: Informações do Taiga
     public-ticket-status-block-name: Progresso do chamado
-
-    # Campos do bloco privado "Taiga".
-    # Informe o nome exato do campo conforme aparece no GLPI.
-    # O sistema converte automaticamente para o nome da API
-    # removendo acentos, espaços e caracteres especiais e adicionando "field" no final.
-    # Exemplos: "ID Taiga" -> "idtaigafield" | "Link Taiga" -> "linktaigafield"
     private-fields:
       id-taiga: ID Taiga
       link-taiga: Link Taiga
-
-    # Campos do bloco público "Progresso do chamado".
-    # Exemplos: "Status do chamado" -> "statusdochamadofield" | "Data prevista" -> "dataprevistafield"
     public-fields:
       status-chamado: Status do chamado
       data-prevista: Conclusão prevista
-
-    # Status inicial colocado no campo "Status do chamado" ao criar a Issue no Taiga.
     status-inicial: New
-
   entities:
-    # Nome da entidade raiz do GLPI.
     root-name: Entidade raiz
 
 security:
   webhook:
-    # IPs que podem chamar /api/webhook/*. Lista vazia = todos.
-    # Inclua "*" em qualquer entrada para liberar qualquer IP (útil com placeholders de env).
     allowed-ips:
-      "*"
-      #- ${WEBHOOK_ALLOWED_IP_GLPI}
-      #- ${WEBHOOK_ALLOWED_IP_TAIGA}
+      - "*"
+    glpi-token: ${WEBHOOK_GLPI_TOKEN:}
+    taiga-secret: ${WEBHOOK_TAIGA_SECRET:}
+
+ssl:
+  skip-verify: ${SSL_SKIP_VERIFY:false}
 
 logging:
   level:
     com:
       chris:
-        glpi_taiga_integration: DEBUG
+        glpi_taiga_integration: INFO
+
+  # Log em arquivo desativado por padrão em desenvolvimento.
+  # Para ativar, defina a variável de ambiente LOG_FILE com o caminho desejado.
+  # Exemplo: LOG_FILE=./logs/app.log
+  file:
+    name: ${LOG_FILE:}
+
+  # Rotação automática
+  # só tem efeito quando LOG_FILE está definido
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 30 # dias de retenção
+      total-size-cap: 200MB
+
   integration:
-    # Local onde o arquivo de log de falhas de integração será salvo
     failure-file: integration_failures.log

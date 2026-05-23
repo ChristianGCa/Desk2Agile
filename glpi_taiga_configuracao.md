@@ -166,7 +166,7 @@ Isso impede edição manual do conteúdo.
 
 ---
 
-## 6. Bloco Privado: "Taiga"
+## 6. Bloco Privado: "Informações do Taiga"
 
 Este bloco armazena os dados internos da integração com o Taiga e é visível apenas para a equipe.
 
@@ -180,7 +180,7 @@ Este bloco armazena os dados internos da integração com o Taiga e é visível 
 | Ativo | Sim |
 | Tipo de item associado | Assistência - Chamados |
 
-> O rótulo deve ser exatamente `Taiga` para corresponder ao valor padrão de `glpi.plugin-fields.private-ticket-status-block-name` no `application.yaml`.
+> O rótulo deve ser exatamente `Informações do Taiga` para corresponder ao valor padrão de `glpi.plugin-fields.private-ticket-status-block-name` no `application.yaml`.
 
 ### Permissões
 
@@ -192,7 +192,7 @@ Este bloco armazena os dados internos da integração com o Taiga e é visível 
 
 ---
 
-## 7. Campos do bloco "Taiga"
+## 7. Campos do bloco "Informações do Taiga"
 
 ### Campo: ID Taiga
 
@@ -289,6 +289,44 @@ Usuário > Minhas configurações > Senhas e chaves de acesso
 
 # Webhooks do GLPI
 
+O GLPI suporta o envio de **cabeçalhos HTTP personalizados** em cada requisição de webhook. O middleware usa esse recurso para validar a autenticidade das requisições recebidas: o GLPI envia um header `Authorization: Bearer <token>` e o middleware rejeita com `401` qualquer requisição que não o apresente ou que traga um token diferente do configurado.
+
+## Como adicionar cabeçalhos personalizados no GLPI
+
+Ao criar ou editar um webhook, role a página até a seção **"Cabeçalhos HTTP personalizados"** (ou *Custom HTTP headers*, dependendo do idioma da instalação). Essa seção fica abaixo dos campos principais do formulário.
+
+### Passos
+
+1. Na seção de cabeçalhos personalizados, clique em **"Adicionar cabeçalho"** (o botão pode aparecer como `+` ou `Adicionar item`).
+2. No campo **Nome do cabeçalho**, digite:
+   ```
+   Authorization
+   ```
+3. No campo **Valor**, digite:
+   ```
+   Bearer TOKEN-GLPI
+   ```
+   Substitua `TOKEN-GLPI` pelo valor definido em `WEBHOOK_GLPI_TOKEN` no `.env` do middleware. O token pode ser qualquer string segura — use um gerador de tokens aleatórios para produção.
+4. Salve o webhook.
+
+> **Atenção:** o valor do campo deve incluir a palavra `Bearer` seguida de um espaço e depois o token. Exemplo completo: `Bearer meu-token-secreto-aqui`. O middleware espera exatamente esse formato.
+
+### Exemplo visual
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Cabeçalhos HTTP personalizados                     │
+├──────────────────────────┬──────────────────────────┤
+│  Nome do cabeçalho       │  Valor                   │
+├──────────────────────────┼──────────────────────────┤
+│  Authorization           │  Bearer TOKEN-GLPI        │
+└──────────────────────────┴──────────────────────────┘
+```
+
+> O token configurado aqui deve ser **idêntico** ao definido em `WEBHOOK_GLPI_TOKEN` no `.env`. Se os valores não baterem, o middleware retorna `401 Não autorizado` e o chamado não é integrado.
+
+---
+
 ## 11. Webhook de Criação
 
 ### Caminho
@@ -310,6 +348,16 @@ Configurar > Webhooks > Adicionar
 | Salvar corpo da resposta | Sim |
 | Log no histórico | Sim |
 
+### Cabeçalho de autenticação
+
+Na seção **"Cabeçalhos HTTP personalizados"**, adicione:
+
+| Nome do cabeçalho | Valor |
+|---|---|
+| `Authorization` | `Bearer TOKEN-GLPI` |
+
+> Substitua `TOKEN-GLPI` pelo valor real definido em `WEBHOOK_GLPI_TOKEN` no `.env`.
+
 ---
 
 ## 12. Webhook de Atualização
@@ -326,6 +374,16 @@ Configurar > Webhooks > Adicionar
 | Método HTTP | POST |
 | Salvar corpo da resposta | Sim |
 | Log no histórico | Sim |
+
+### Cabeçalho de autenticação
+
+Adicione o **mesmo cabeçalho** configurado no webhook de criação:
+
+| Nome do cabeçalho | Valor |
+|---|---|
+| `Authorization` | `Bearer TOKEN-GLPI` |
+
+> Use o mesmo token em todos os webhooks do GLPI. O middleware valida apenas se o token recebido bate com o configurado — não diferencia por evento.
 
 ---
 
@@ -382,9 +440,21 @@ Settings > Integrations > Webhooks
 |---|---|
 | Name | Atualizar GLPI |
 | URL | https://middleware.exemplo.local/api/webhook/taiga |
-| Secret key | Não necessária |
+| Secret key | `chave-secreta` |
 
-Configure o webhook em **cada projeto** que deve sincronizar status com o GLPI.
+> **A secret key é obrigatória.** O Taiga usa esse valor para assinar cada requisição com HMAC-SHA1 e envia a assinatura no header `X-Taiga-Webhook-Signature`. O middleware recalcula a assinatura com o body recebido e rejeita com `401` se não bater.
+>
+> Use um valor longo e aleatório (mínimo 32 caracteres recomendado). O mesmo valor deve ser configurado em `WEBHOOK_TAIGA_SECRET` no `.env` do middleware.
+>
+> Configure o webhook em **cada projeto** que deve sincronizar status com o GLPI.
+
+### Como o Taiga gera a assinatura
+
+```
+X-Taiga-Webhook-Signature = HMAC-SHA1(secret_key, body_cru_utf8)
+```
+
+O resultado é enviado em hexadecimal. O middleware replica esse cálculo para verificar a autenticidade.
 
 ---
 
@@ -402,7 +472,7 @@ Este projeto recebe chamados sem entidade atribuída no GLPI. O nome é configur
 
 # Mapeamento GLPI → Taiga
 
-Após criar entidades no GLPI e projetos no Taiga, configure o mapeamento no `application.yaml`:
+Após criar entidades no GLPI e projetos no Taiga, configure o mapeamento no `config/application.yaml`:
 
 ```yaml
 taiga:
@@ -416,3 +486,23 @@ taiga:
 ```
 
 O middleware busca a entidade do chamado no GLPI, localiza o mapeamento correspondente e cria a issue no projeto Taiga configurado. Se não encontrar mapeamento, usa o projeto `fallback-project-name`.
+
+---
+
+# Variáveis de ambiente
+
+Referência completa das variáveis do arquivo `.env`:
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `TAIGA_URL` | Sim | URL base da API do Taiga (ex: `http://taiga.local/api/v1`) |
+| `TAIGA_WEB_URL` | Sim | URL base web do Taiga (usada para montar links de issues) |
+| `TAIGA_USERNAME` | Sim | Usuário do Taiga usado pelo middleware |
+| `TAIGA_PASSWORD` | Sim | Senha do usuário Taiga |
+| `GLPI_URL` | Sim | URL da API REST do GLPI (ex: `http://glpi.local/apirest.php`) |
+| `GLPI_APP_TOKEN` | Sim | App token do cliente de API do GLPI |
+| `GLPI_USER_TOKEN` | Sim | User token do usuário GLPI |
+| `WEBHOOK_GLPI_TOKEN` | Recomendado | Token Bearer enviado pelo GLPI no header `Authorization` |
+| `WEBHOOK_TAIGA_SECRET` | Recomendado | Secret key configurada nos webhooks do Taiga (HMAC-SHA1) |
+| `SSL_SKIP_VERIFY` | Não | `true` para aceitar certificados autoassinados (padrão: `false`) |
+| `LOG_FILE` | Não | Caminho do arquivo de log (ex: `./logs/app.log`); vazio = sem log em arquivo |

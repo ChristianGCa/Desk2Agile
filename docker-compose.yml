@@ -1,0 +1,22 @@
+services:
+  middleware:
+    build: .
+    image: glpi-taiga-middleware:latest
+    container_name: glpi-taiga-middleware
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    env_file:
+      - .env
+    environment:
+      # Log em arquivo: defina o caminho para ativar, deixe vazio para desativar.
+      # Se omitido aqui, usa o padrão do config/application.yaml (/app/logs/app.log).
+      # LOG_FILE=          # desativa o log em arquivo
+      LOG_FILE: /app/logs/app.log
+    volumes:
+      - ./logs:/app/logs
+      - ./certs:/app/certs:ro
+      # Este arquivo sobrescreve o yaml embutido no JAR
+      - ./config/application.yaml:/app/config/application.yaml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
