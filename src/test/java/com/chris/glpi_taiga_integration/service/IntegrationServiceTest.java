@@ -40,6 +40,11 @@ class IntegrationServiceTest {
     @Mock
     private ProjectRoutingService projectRoutingService;
 
+    // FIX: FailureLogService é exigido pelo construtor — sem ele, Mockito usa Objenesis
+    // e o array locks[] nunca é inicializado → NullPointerException
+    @Mock
+    private FailureLogService failureLogService;
+
     @InjectMocks
     private IntegrationService integrationService;
 
@@ -48,6 +53,9 @@ class IntegrationServiceTest {
         // Ambos os gatilhos desligados por padrão; cada teste ativa o que precisa
         ReflectionTestUtils.setField(integrationService, "categoryThatSendToTaiga", "");
         ReflectionTestUtils.setField(integrationService, "assigneeThatSendToTaiga", "");
+        // FIX: @Value não é processado em testes Mockito puros — maxAuthRetries fica 0 (default de int)
+        // Definir explicitamente para corresponder ao default da aplicação
+        ReflectionTestUtils.setField(integrationService, "maxAuthRetries", 1);
     }
 
     @Test

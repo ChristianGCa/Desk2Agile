@@ -289,7 +289,43 @@ Usuário > Minhas configurações > Senhas e chaves de acesso
 
 # Webhooks do GLPI
 
-O middleware valida um header `Authorization` em todas as requisições vindas do GLPI. Configure os headers personalizados conforme abaixo.
+O GLPI suporta o envio de **cabeçalhos HTTP personalizados** em cada requisição de webhook. O middleware usa esse recurso para validar a autenticidade das requisições recebidas: o GLPI envia um header `Authorization: Bearer <token>` e o middleware rejeita com `401` qualquer requisição que não o apresente ou que traga um token diferente do configurado.
+
+## Como adicionar cabeçalhos personalizados no GLPI
+
+Ao criar ou editar um webhook, role a página até a seção **"Cabeçalhos HTTP personalizados"** (ou *Custom HTTP headers*, dependendo do idioma da instalação). Essa seção fica abaixo dos campos principais do formulário.
+
+### Passos
+
+1. Na seção de cabeçalhos personalizados, clique em **"Adicionar cabeçalho"** (o botão pode aparecer como `+` ou `Adicionar item`).
+2. No campo **Nome do cabeçalho**, digite:
+   ```
+   Authorization
+   ```
+3. No campo **Valor**, digite:
+   ```
+   Bearer TOKEN-GLPI
+   ```
+   Substitua `TOKEN-GLPI` pelo valor definido em `WEBHOOK_GLPI_TOKEN` no `.env` do middleware. O token pode ser qualquer string segura — use um gerador de tokens aleatórios para produção.
+4. Salve o webhook.
+
+> **Atenção:** o valor do campo deve incluir a palavra `Bearer` seguida de um espaço e depois o token. Exemplo completo: `Bearer meu-token-secreto-aqui`. O middleware espera exatamente esse formato.
+
+### Exemplo visual
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Cabeçalhos HTTP personalizados                     │
+├──────────────────────────┬──────────────────────────┤
+│  Nome do cabeçalho       │  Valor                   │
+├──────────────────────────┼──────────────────────────┤
+│  Authorization           │  Bearer TOKEN-GLPI        │
+└──────────────────────────┴──────────────────────────┘
+```
+
+> O token configurado aqui deve ser **idêntico** ao definido em `WEBHOOK_GLPI_TOKEN` no `.env`. Se os valores não baterem, o middleware retorna `401 Não autorizado` e o chamado não é integrado.
+
+---
 
 ## 11. Webhook de Criação
 
@@ -312,17 +348,15 @@ Configurar > Webhooks > Adicionar
 | Salvar corpo da resposta | Sim |
 | Log no histórico | Sim |
 
-### Header personalizado de autenticação
+### Cabeçalho de autenticação
 
-Na seção de **Headers HTTP personalizados** do webhook, adicione:
+Na seção **"Cabeçalhos HTTP personalizados"**, adicione:
 
-| Header | Valor |
+| Nome do cabeçalho | Valor |
 |---|---|
 | `Authorization` | `Bearer TOKEN-GLPI` |
 
-> Substitua `TOKEN-GLPI` por um valor seguro e único. Esse mesmo valor deve ser configurado em `WEBHOOK_GLPI_TOKEN` no `.env` do middleware.
->
-> O middleware rejeita com `401 Não autorizado` qualquer requisição do GLPI que não envie esse header ou que envie um token diferente.
+> Substitua `TOKEN-GLPI` pelo valor real definido em `WEBHOOK_GLPI_TOKEN` no `.env`.
 
 ---
 
@@ -341,15 +375,15 @@ Na seção de **Headers HTTP personalizados** do webhook, adicione:
 | Salvar corpo da resposta | Sim |
 | Log no histórico | Sim |
 
-### Header personalizado de autenticação
+### Cabeçalho de autenticação
 
-Adicione o mesmo header configurado no webhook de criação:
+Adicione o **mesmo cabeçalho** configurado no webhook de criação:
 
-| Header | Valor |
+| Nome do cabeçalho | Valor |
 |---|---|
 | `Authorization` | `Bearer TOKEN-GLPI` |
 
-> Use o mesmo token em todos os webhooks do GLPI. O middleware não diferencia os tokens por evento — apenas valida se o token recebido bate com o configurado.
+> Use o mesmo token em todos os webhooks do GLPI. O middleware valida apenas se o token recebido bate com o configurado — não diferencia por evento.
 
 ---
 
@@ -438,7 +472,7 @@ Este projeto recebe chamados sem entidade atribuída no GLPI. O nome é configur
 
 # Mapeamento GLPI → Taiga
 
-Após criar entidades no GLPI e projetos no Taiga, configure o mapeamento no `application.yaml`:
+Após criar entidades no GLPI e projetos no Taiga, configure o mapeamento no `config/application.yaml`:
 
 ```yaml
 taiga:

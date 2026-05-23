@@ -49,6 +49,7 @@ O nome do bloco define a rota do endpoint. Exemplos:
 
 - Java `21`
 - Maven `3.9+` (ou `./mvnw`)
+- Docker e Docker Compose (para execução em container)
 - Instâncias acessíveis de GLPI e Taiga
 - Webhooks configurados em ambos os sistemas
 - Plugin `Fields` instalado e habilitado no GLPI
@@ -63,7 +64,7 @@ Esse arquivo descreve a criação de:
 - Entidades e categorias no GLPI
 - Blocos e campos do `Plugin Fields` (bloco "Taiga" e bloco "Progresso do chamado")
 - API legada e tokens do GLPI
-- Webhooks do GLPI e do Taiga, incluindo configuração de autenticação
+- Webhooks do GLPI e do Taiga, incluindo configuração de cabeçalhos de autenticação
 - Projetos no Taiga (incluindo o projeto de fallback `Diversos`)
 
 ## Segurança dos webhooks
@@ -115,7 +116,13 @@ Use `"*"` (padrão) para desabilitar a restrição por IP.
 
 ## Variáveis de ambiente (`.env`)
 
-Use um arquivo `.env` na raiz com (consulte `.env.example` para o template completo):
+Copie o arquivo de exemplo e preencha com os valores reais:
+
+```bash
+cp .env.example .env
+```
+
+Variáveis principais (consulte `.env.example` para o template completo):
 
 ```env
 TAIGA_WEB_URL=http://127.0.0.1:9000/
@@ -132,9 +139,9 @@ WEBHOOK_GLPI_TOKEN=TOKEN-GLPI
 WEBHOOK_TAIGA_SECRET=chave-secreta
 ```
 
-## Configuração principal (`application.yaml`)
+## Configuração principal (`config/application.yaml`)
 
-Ajuste principalmente:
+Edite `config/application.yaml` na raiz do projeto (este arquivo sobrescreve o YAML embutido no JAR em produção). Ajuste principalmente:
 
 - `glpi.api.category-that-send-to-taiga`: categoria que dispara criação de issue (`*` = qualquer; vazio = desligado).
 - `glpi.api.assignee-that-send-to-taiga`: login do técnico que dispara criação de issue (`*` = qualquer; vazio = desligado).
@@ -149,13 +156,108 @@ Ajuste principalmente:
 - `security.webhook.taiga-secret`: secret key do Taiga para validação HMAC-SHA1 (via `WEBHOOK_TAIGA_SECRET`).
 - `security.webhook.allowed-ips`: IPs autorizados a chamar os webhooks.
 
-## Executar localmente
+## Build
+
+### Build do JAR (sem Docker)
+
+```bash
+./mvnw clean package -DskipTests
+```
+
+O JAR gerado fica em `target/glpi-taiga-integration-*.jar`.
+
+Para incluir os testes no build:
+
+```bash
+./mvnw clean package
+```
+
+### Build da imagem Docker
+
+```bash
+docker build -t glpi-taiga-middleware:latest .
+```
+
+A imagem usa build multi-stage: compila o JAR em uma imagem JDK e o executa em uma imagem JRE menor (`eclipse-temurin:21-jre-alpine`).
+
+## Executar
+
+### Localmente (sem Docker)
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
 Aplicação inicia, por padrão, em `http://localhost:8081`.
+
+### Via Docker (container isolado)
+
+Certifique-se de ter o `.env` preenchido e a imagem construída, depois:
+
+```bash
+docker run -d \
+  --name glpi-taiga-middleware \
+  --restart unless-stopped \
+  -p 8081:8081 \
+  --env-file .env \
+  -v "$(pwd)/config/application.yaml:/app/config/application.yaml:ro" \
+  -v "$(pwd)/logs:/app/logs" \
+  -v "$(pwd)/certs:/app/certs:ro" \
+  glpi-taiga-middleware:latest
+```
+
+### Via Docker Compose (recomendado para produção)
+
+```bash
+# Subir em background
+docker compose up -d
+
+# Verificar logs em tempo real
+docker compose logs -f middleware
+
+# Parar
+docker compose down
+```
+
+O `docker-compose.yml` já monta:
+- `./config/application.yaml` → sobrescreve o YAML embutido no JAR
+- `./logs` → persiste os logs em arquivo
+- `./certs` → certificados customizados importados automaticamente no truststore da JVM
+
+### Rebuild e restart (após mudanças de código)
+
+```bash
+docker compose down
+docker build -t glpi-taiga-middleware:latest .
+docker compose up -d
+```
+
+Ou em um único comando:
+
+```bash
+docker compose up -d --build
+```
+
+## Certificados SSL customizados
+
+Coloque arquivos `.crt` ou `.pem` na pasta `./certs/`. O `docker-entrypoint.sh` os importa automaticamente no truststore da JVM antes de iniciar a aplicação.
+
+```bash
+cp meu-certificado.crt ./certs/
+docker compose up -d --build
+```
+
+Se não puder montar certificados, ative a flag de skip (apenas em ambientes controlados):
+
+```env
+SSL_SKIP_VERIFY=true
+```
+
+## Testes
+
+```bash
+./mvnw test
+```
 
 ## Endpoints de webhook
 

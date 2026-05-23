@@ -17,9 +17,9 @@ taiga:
     # Adicione quantas entradas precisar
     entity-mappings:
       - glpi-entity-name: Serviço 1
-        taiga-project-name: Serviço 1
-      - glpi-entity-name: Serviço 2
-        taiga-project-name: Serviço 2
+        taiga-project-name: Primeiro Serviço
+      - glpi-entity-name: Diversos
+        taiga-project-name: Diversos
 
 glpi:
   api:
@@ -34,11 +34,11 @@ glpi:
     # Nome do usuário atribuído que dispara criação de issue
     # Dispara mesmo fora da categoria acima
     # Use "*" para qualquer técnico; deixe vazio para desligar este gatilho
-    assignee-that-send-to-taiga: "tech"
+    assignee-that-send-to-taiga: tech
 
   plugin-fields:
     # Nome do bloco visível apenas para a equipe (contém ID Taiga e Link Taiga)
-    private-ticket-status-block-name: Taiga
+    private-ticket-status-block-name: Informações do Taiga
 
     # Nome do bloco visível para todos (contém Status e Data prevista)
     public-ticket-status-block-name: Progresso do chamado
@@ -86,9 +86,9 @@ logging:
   level:
     com:
       chris:
-        glpi_taiga_integration: DEBUG   # troque para DEBUG para diagnóstico detalhado
+        glpi_taiga_integration: INFO   # troque para DEBUG para diagnóstico detalhado
 
-  # Log em arquivo — ativado no Docker via variável LOG_FILE.
+  # Log em arquivo - ativado no Docker via variável LOG_FILE.
   # Para desativar: remova LOG_FILE do .env ou deixe em branco (LOG_FILE=).
   file:
     name: ${LOG_FILE:/app/logs/app.log}
@@ -97,7 +97,7 @@ logging:
   logback:
     rollingpolicy:
       max-file-size: 10MB
-      max-history: 10        # dias de retenção
+      max-history: 10 # dias de retenção
       total-size-cap: 200MB
 
   integration:
