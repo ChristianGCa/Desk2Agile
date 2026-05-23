@@ -79,6 +79,25 @@ security:
 ssl:
   skip-verify: ${SSL_SKIP_VERIFY:false}
 
+integration:
+  auth:
+    max-retries: 1
+
+  async:
+    # Threads sempre ativas no pool de webhooks.
+    # Aumente se houver muitos webhooks simultâneos.
+    core-pool-size: ${WEBHOOK_POOL_CORE:2}
+
+    # Limite de threads sob pico. Threads extras são criadas quando a fila enche.
+    max-pool-size: ${WEBHOOK_POOL_MAX:5}
+
+    # Tarefas pendentes antes de rejeitar (retorna 503 ao chamador).
+    # Cada tarefa pendente consome ~poucos KB de heap.
+    queue-capacity: ${WEBHOOK_POOL_QUEUE:100}
+
+    # Segundos para drenar tarefas em andamento no shutdown gracioso.
+    shutdown-timeout: ${WEBHOOK_POOL_SHUTDOWN:30}
+
 # ─────────────────────────────────────────
 # LOGS
 # ─────────────────────────────────────────

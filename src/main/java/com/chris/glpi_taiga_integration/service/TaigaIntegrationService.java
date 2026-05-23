@@ -8,11 +8,9 @@ import com.chris.glpi_taiga_integration.dto.TaigaIssueResponse;
 import com.chris.glpi_taiga_integration.dto.TaigaProjectResponse;
 import com.chris.glpi_taiga_integration.dto.TaigaUserStoryDetailsResponse;
 import com.chris.glpi_taiga_integration.dto.TaigaUserStoryStatusResponse;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -35,7 +33,6 @@ public class TaigaIntegrationService {
     static final String CACHE_KEY = "'token'";
 
     private final RestClient restClient;
-    private final CacheManager cacheManager;
     private static final String AUTH_TYPE_NORMAL = "normal";
 
     @Value("${taiga.api.url}")
@@ -54,11 +51,9 @@ public class TaigaIntegrationService {
      * Construtor para injeção de dependências do Spring.
      *
      * @param restClient Cliente HTTP para as requisições.
-     * @param cacheManager Gerenciador de cache para controle manual de invalidação.
      */
-    public TaigaIntegrationService(RestClient restClient, CacheManager cacheManager) {
+    public TaigaIntegrationService(RestClient restClient) {
         this.restClient = restClient;
-        this.cacheManager = cacheManager;
     }
 
     /**
@@ -89,18 +84,6 @@ public class TaigaIntegrationService {
     }
 
     /**
-     * Remove manualmente o token do Taiga armazenado em cache, forçando
-     * uma nova autenticação na próxima chamada do serviço.
-     */
-    public void invalidateTaigaToken() {
-        Optional.ofNullable(cacheManager.getCache(TAIGA_TOKEN_CACHE))
-                .ifPresent(cache -> {
-                    cache.clear();
-                    log.debug("TAIGA SERVICE - Cache de token Taiga invalidado.");
-                });
-    }
-
-    /**
      * Cria uma nova Issue (Incidente) em um projeto específico do Taiga.
      *
      * @param projectId ID numérico do projeto no Taiga.
@@ -124,6 +107,26 @@ public class TaigaIntegrationService {
     }
 
     /**
+     * Deleta uma Issue do Taiga pelo seu ID.
+     *
+     * <p>Usado como operação de compensação quando a atualização do GLPI falha
+     * após a issue já ter sido criada no Taiga. Garante que não fiquem issues
+     * órfãs no Taiga sem correspondência no GLPI.
+     *
+     * @param issueId ID interno da issue a deletar.
+     * @param token   Token de autorização válido.
+     */
+    public void deleteIssueOnTaiga(Long issueId, String token) {
+        log.warn("TAIGA SERVICE - Deletando issue {} (compensação por falha no GLPI).", issueId);
+        restClient.delete()
+                .uri(taigaApiUrl + "/issues/" + issueId)
+                .header("Authorization", "Bearer " + token)
+                .retrieve()
+                .toBodilessEntity();
+        log.warn("TAIGA SERVICE - Issue {} deletada com sucesso.", issueId);
+    }
+
+    /**
      * Monta a URL de visualização web para uma determinada Issue.
      *
      * @param projectSlug Identificador textual do projeto (slug).
@@ -133,18 +136,6 @@ public class TaigaIntegrationService {
     public String buildTaigaIssueUrl(String projectSlug, Long ref) {
         if (ref == null || projectSlug == null || projectSlug.isBlank()) return null;
         return normalizeBaseUrl() + "/project/" + projectSlug + "/issue/" + ref;
-    }
-
-    /**
-     * Monta a URL de visualização web para uma determinada User Story (História de Usuário).
-     *
-     * @param projectSlug Identificador textual do projeto (slug).
-     * @param ref Código de referência sequencial da história.
-     * @return URL absoluta da user story ou null se os parâmetros forem inválidos.
-     */
-    public String buildTaigaUserStoryUrl(String projectSlug, Long ref) {
-        if (ref == null || projectSlug == null || projectSlug.isBlank()) return null;
-        return normalizeBaseUrl() + "/project/" + projectSlug + "/us/" + ref;
     }
 
     /**
