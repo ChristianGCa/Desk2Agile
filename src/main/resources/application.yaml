@@ -11,10 +11,10 @@ taiga:
   routing:
     fallback-project-name: Diversos
     entity-mappings:
-      - glpi-entity-name: Serviço 1
-        taiga-project-name: Serviço 1
-      - glpi-entity-name: Serviço 2
-        taiga-project-name: Serviço 2
+      - glpi-entity-name: Projeto 1
+        taiga-project-name: Primeiro Serviço
+      - glpi-entity-name: Diversos
+        taiga-project-name: Diversos
 
 glpi:
   api:
@@ -32,7 +32,28 @@ glpi:
     public-fields:
       status-chamado: Status do chamado
       data-prevista: Conclusão prevista
-    status-inicial: New
+    status-inicial: Novo
+  status-map:
+    - taiga: New
+      glpi: Novo
+    - taiga: In progress
+      glpi: Em andamento
+    - taiga: Ready for test
+      glpi: Pronto para teste
+    - taiga: Done
+      glpi: Concluído
+    - taiga: Archived
+      glpi: Arquivado
+    - taiga: Closed
+      glpi: Fechado
+    - taiga: Needs info
+      glpi: Aguardando informação
+    - taiga: Rejected
+      glpi: Rejeitado
+    - taiga: Postponed
+      glpi: Adiado
+    - taiga: Ready
+      glpi: Preparado
   entities:
     root-name: Entidade raiz
 

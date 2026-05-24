@@ -16,7 +16,7 @@ taiga:
     # Os nomes devem ser exatamente como aparecem no GLPI e no Taiga.
     # Adicione quantas entradas precisar
     entity-mappings:
-      - glpi-entity-name: Serviço 1
+      - glpi-entity-name: Projeto 1
         taiga-project-name: Primeiro Serviço
       - glpi-entity-name: Diversos
         taiga-project-name: Diversos
@@ -38,12 +38,15 @@ glpi:
 
   plugin-fields:
     # Nome do bloco visível apenas para a equipe (contém ID Taiga e Link Taiga)
+    # Coloque o mesmo nome que definiu no GLPI
     private-ticket-status-block-name: Informações do Taiga
 
     # Nome do bloco visível para todos (contém Status e Data prevista)
+    # Coloque o mesmo nome que definiu no GLPI
     public-ticket-status-block-name: Progresso do chamado
 
     # Nomes dos campos dentro dos blocos do plugin Fields do GLPI
+    # Coloque os mesmos nomes que definiu no GLPI
     private-fields:
       id-taiga: ID Taiga
       link-taiga: Link Taiga
@@ -53,7 +56,33 @@ glpi:
       data-prevista: Data prevista
 
     # Valor inicial do campo "Status do chamado" ao criar issue
-    status-inicial: New
+    status-inicial: Novo
+
+  # Dicionário de tradução de status do Taiga - GLPI.
+  # Chave: nome exato do status no Taiga (case-sensitive).
+  # Valor: texto a ser gravado no campo "Status do chamado" do GLPI.
+  # Se um status não estiver mapeado, o nome original do Taiga é usado (com aviso no log).
+  status-map:
+    - taiga: New
+      glpi: Novo
+    - taiga: In progress
+      glpi: Em andamento
+    - taiga: Ready for test
+      glpi: Pronto para teste
+    - taiga: Done
+      glpi: Concluído
+    - taiga: Archived
+      glpi: Arquivado
+    - taiga: Closed
+      glpi: Fechado
+    - taiga: Needs info
+      glpi: Aguardando informação
+    - taiga: Rejected
+      glpi: Rejeitado
+    - taiga: Postponed
+      glpi: Adiado
+    - taiga: Ready
+      glpi: Preparado
 
   entities:
     # Nome da entidade raiz do GLPI
@@ -68,6 +97,12 @@ security:
       - "*"
       #- ${WEBHOOK_ALLOWED_IP_GLPI}
       #- ${WEBHOOK_ALLOWED_IP_TAIGA}
+
+    ###### TOKEN E SECRET ######
+
+    # O token dos webhooks GLPI devem ser os mesmos para todos,
+    # assim como o secret dos webhooks de cada projeto no Taiga.
+    # O ChamaTaiga no momento não suporta tokens e secrets diferentes
 
     # Token Bearer enviado pelo GLPI no header Authorization
     # Deve bater com o valor configurado nos webhooks do GLPI
@@ -98,14 +133,13 @@ integration:
     # Segundos para drenar tarefas em andamento no shutdown gracioso.
     shutdown-timeout: ${WEBHOOK_POOL_SHUTDOWN:30}
 
-# ─────────────────────────────────────────
-# LOGS
-# ─────────────────────────────────────────
+####### LOGS ##########
+
 logging:
   level:
     com:
       chris:
-        glpi_taiga_integration: INFO   # troque para DEBUG para diagnóstico detalhado
+        glpi_taiga_integration: INFO # troque para DEBUG para diagnóstico detalhado
 
   # Log em arquivo - ativado no Docker via variável LOG_FILE.
   # Para desativar: remova LOG_FILE do .env ou deixe em branco (LOG_FILE=).
