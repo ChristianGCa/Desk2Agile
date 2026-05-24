@@ -5,6 +5,7 @@ import com.chris.glpi_taiga_integration.dto.GlpiPluginFieldsRecord;
 import com.chris.glpi_taiga_integration.dto.GlpiTeamMember;
 import com.chris.glpi_taiga_integration.dto.GlpiWebhookPayload;
 import com.chris.glpi_taiga_integration.dto.TaigaIssueData;
+import com.chris.glpi_taiga_integration.dto.TaigaIssueResponse;
 import com.chris.glpi_taiga_integration.dto.TaigaPromotedToChange;
 import com.chris.glpi_taiga_integration.dto.TaigaUserStoryDetailsResponse;
 import com.chris.glpi_taiga_integration.dto.TaigaWebhookPayload;
@@ -19,6 +20,14 @@ import org.springframework.stereotype.Service;
 /**
  * Serviço centralizador da integração bidirecional entre GLPI e Taiga.
  * Gerencia o fluxo de criação de issues e sincronização de progresso via Webhooks.
+ * Processamento assíncrono: os métodos públicos {@link #processGlpiWebhook} e
+ * {@link #processTaigaWebhook} são chamados pelo {@code WebhookController} dentro de
+ * tasks submetidas ao {@code webhookExecutor}. O controller responde 202 imediatamente;
+ * erros são capturados lá e registrados via {@link FailureLogService}.
+ * Compensação em falha parcial: se a issue Taiga for criada mas a atualização
+ * do GLPI falhar, a issue é deletada automaticamente antes de propagar a exceção.
+ * O {@code syncExternalProgress} (atualização de status) é best-effort: falhas são
+ * registradas em log mas não desfazem o vínculo já gravado no GLPI.
  */
 @Service
 public class IntegrationService {
@@ -33,7 +42,7 @@ public class IntegrationService {
     private final ProjectRoutingService projectRoutingService;
     private final FailureLogService failureLogService;
 
-    /** Lock listrado para mitigar concorrência local baseada no ID do ticket. */
+    // Lock listrado para mitigar concorrência local baseada no ID do ticket.
     private final Object[] locks = new Object[LOCK_STRIPES];
 
     @Value("${glpi.api.category-that-send-to-taiga:}")
@@ -63,11 +72,11 @@ public class IntegrationService {
         }
     }
 
-    // GLPI Webhook
-
     /**
      * Processa os payloads recebidos do webhook do GLPI.
      * Filtra tickets elegíveis e aplica concorrência isolada por ID.
+     *
+     * <p>Chamado pelo controller dentro de uma task do {@code webhookExecutor}.
      *
      * @param payload Dados enviados pelo gatilho do GLPI.
      */
@@ -255,6 +264,16 @@ public class IntegrationService {
     /**
      * Core do processamento do webhook GLPI. Inicializa sessão, valida duplicidade,
      * roteia o projeto, cria a issue no Taiga e atualiza os campos customizados do GLPI.
+     * Compensação:
+     * <ul>
+     *   <li>Se {@code updateGlpiTicket} falhar após a issue já ter sido criada no Taiga,
+     *       a issue é deletada automaticamente antes de propagar a exceção. Isso garante
+     *       que não fiquem issues órfãs no Taiga sem correspondência no GLPI.
+     *       Na eventualidade de a deleção também falhar, o erro é registrado no
+     *       {@code integration_failures.log} com o ID da issue Taiga para limpeza manual.</li>
+     *   <li>{@code syncExternalProgress} (atualização de status) é best-effort: falhas
+     *       são registradas mas não desfazem o vínculo GLPI↔Taiga já gravado.</li>
+     * </ul>
      */
     private void doProcessGlpiWebhook(GlpiItem item, Long ticketId) {
         String sessionToken = glpiIntegrationService.initSession();
@@ -262,7 +281,7 @@ public class IntegrationService {
         Optional<GlpiPluginFieldsRecord> record =
                 glpiIntegrationService.getPluginFieldsRecord(ticketId, sessionToken);
 
-        if (ticketAlreadyIntegrated(record, ticketId)) {
+        if (ticketAlreadyIntegrated(record.orElse(null), ticketId)) {
             return;
         }
 
@@ -274,7 +293,7 @@ public class IntegrationService {
         var project =
                 taigaIntegrationService.getProjectBySlug(projectSlug, taigaToken);
 
-        var taigaIssue =
+        TaigaIssueResponse taigaIssue =
                 taigaIntegrationService.createIssueOnTaiga(
                         project.id(),
                         item.name(),
@@ -286,17 +305,37 @@ public class IntegrationService {
                         projectSlug,
                         taigaIssue.ref());
 
-        glpiIntegrationService.updateGlpiTicket(
-                ticketId,
-                taigaIssue.id(),
-                taigaIssueUrl,
-                sessionToken);
+        // --- ponto de falha parcial: issue Taiga existe, GLPI ainda não foi atualizado ---
+        try {
+            glpiIntegrationService.updateGlpiTicket(
+                    ticketId,
+                    taigaIssue.id(),
+                    taigaIssueUrl,
+                    sessionToken);
+        } catch (Exception e) {
+            log.error(
+                    "GLPI - Falha ao atualizar ticket {} após criar issue Taiga {}. Iniciando compensação.",
+                    ticketId, taigaIssue.id());
+            tryDeleteTaigaIssue(taigaIssue.id(), taigaToken);
+            throw e; // propaga para withAuthRetry decidir se tenta novamente
+        }
 
-        glpiIntegrationService.syncExternalProgress(
-                ticketId,
-                glpiIntegrationService.getInitialStatusExternalProgress(),
-                null,
-                sessionToken);
+        // --- sincronização de status: best-effort, não compensa ---
+        try {
+            glpiIntegrationService.syncExternalProgress(
+                    ticketId,
+                    glpiIntegrationService.getInitialStatusExternalProgress(),
+                    null,
+                    sessionToken);
+        } catch (Exception e) {
+            log.warn(
+                    "GLPI - Falha ao sincronizar status inicial do ticket {}. "
+                            + "Vínculo GLPI↔Taiga gravado, mas status não atualizado. Issue Taiga: {}",
+                    ticketId, taigaIssue.id());
+            failureLogService.logFailure(
+                    "Sync status inicial ticket " + ticketId + " (issue Taiga " + taigaIssue.id() + ")", e);
+            // não re-lança: o vínculo principal já está salvo
+        }
 
         log.info(
                 "GLPI - Integração concluída para Ticket {}: Taiga ID {}",
@@ -305,17 +344,37 @@ public class IntegrationService {
     }
 
     /**
+     * Tenta deletar a issue Taiga como operação de compensação.
+     * Se a deleção falhar, registra no failure log para ação manual — nunca oculta o erro original.
+     *
+     * @param taigaIssueId ID da issue a deletar.
+     * @param taigaToken   Token de autenticação válido.
+     */
+    private void tryDeleteTaigaIssue(Long taigaIssueId, String taigaToken) {
+        try {
+            taigaIntegrationService.deleteIssueOnTaiga(taigaIssueId, taigaToken);
+            log.warn("GLPI - Compensação concluída: issue Taiga {} deletada.", taigaIssueId);
+        } catch (Exception ex) {
+            log.error(
+                    "GLPI - Compensação falhou: issue Taiga {} NÃO foi deletada. Limpeza manual necessária.",
+                    taigaIssueId, ex);
+            failureLogService.logFailure(
+                    "Compensação: delete manual necessário da issue Taiga " + taigaIssueId, ex);
+        }
+    }
+
+    /**
      * Verifica se o ticket já possui um ID externo válido atrelado no plugin de campos do GLPI.
      */
     private boolean ticketAlreadyIntegrated(
-            Optional<GlpiPluginFieldsRecord> record,
+            GlpiPluginFieldsRecord record,
             Long ticketId) {
 
-        if (record.isEmpty()) {
+        if (record == null) {
             return false;
         }
 
-        String taigaId = record.get().taigaIdValue();
+        String taigaId = record.taigaIdValue();
 
         if (taigaId == null || taigaId.isBlank()) {
             return false;
@@ -333,11 +392,15 @@ public class IntegrationService {
         return true;
     }
 
-    // Taiga
+    // -------------------------------------------------------------------------
+    // Taiga Webhook
+    // -------------------------------------------------------------------------
 
     /**
      * Processa payloads vindos do webhook do Taiga.
      * Filtra e redireciona eventos legítimos de modificação em Issues ou User Stories.
+     *
+     * <p>Chamado pelo controller dentro de uma task do {@code webhookExecutor}.
      *
      * @param payload Evento disparado pelo Taiga.
      */

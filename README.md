@@ -147,7 +147,7 @@ Edite `config/application.yaml` na raiz do projeto (este arquivo sobrescreve o Y
 - `glpi.api.assignee-that-send-to-taiga`: login do técnico que dispara criação de issue (`*` = qualquer; vazio = desligado).
 - `taiga.routing.entity-mappings`: mapeamento de entidade GLPI → projeto Taiga.
 - `taiga.routing.fallback-project-name`: projeto usado quando não houver mapeamento.
-- `glpi.plugin-fields.private-ticket-status-block-name`: nome exato do bloco privado no GLPI (padrão: `Taiga`).
+- `glpi.plugin-fields.private-ticket-status-block-name`: nome exato do bloco privado no GLPI (padrão: `Informações do Taiga`).
 - `glpi.plugin-fields.public-ticket-status-block-name`: nome exato do bloco público no GLPI (padrão: `Progresso do chamado`).
 - `glpi.plugin-fields.private-fields.*`: nomes exatos dos campos do bloco privado.
 - `glpi.plugin-fields.public-fields.*`: nomes exatos dos campos do bloco público.
