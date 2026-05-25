@@ -152,6 +152,7 @@ Edite `config/application.yaml` na raiz do projeto (este arquivo sobrescreve o Y
 - `glpi.plugin-fields.private-fields.*`: nomes exatos dos campos do bloco privado.
 - `glpi.plugin-fields.public-fields.*`: nomes exatos dos campos do bloco público.
 - `glpi.plugin-fields.status-inicial`: status gravado no bloco público ao criar a issue.
+- `glpi.status-map`: lista de traduções de status do Taiga para português. Cada entrada tem `taiga` (valor exato enviado pelo Taiga) e `glpi` (texto gravado no GLPI). Se um status recebido não estiver na lista, o valor original do Taiga é gravado e um aviso é registrado no log.
 - `security.webhook.glpi-token`: token Bearer esperado do GLPI (via `WEBHOOK_GLPI_TOKEN`).
 - `security.webhook.taiga-secret`: secret key do Taiga para validação HMAC-SHA1 (via `WEBHOOK_TAIGA_SECRET`).
 - `security.webhook.allowed-ips`: IPs autorizados a chamar os webhooks.

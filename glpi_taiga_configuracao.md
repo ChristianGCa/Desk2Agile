@@ -476,16 +476,56 @@ Após criar entidades no GLPI e projetos no Taiga, configure o mapeamento no `co
 
 ```yaml
 taiga:
-  routing:
-    fallback-project-name: Diversos
-    entity-mappings:
-      - glpi-entity-name: Projeto Suporte
-        taiga-project-name: Projeto Suporte
-      - glpi-entity-name: Serviço 1
-        taiga-project-name: Serviço 1
+   routing:
+      fallback-project-name: Diversos
+      entity-mappings:
+         - glpi-entity-name: Projeto Suporte
+           taiga-project-name: Projeto Suporte
+         - glpi-entity-name: Serviço 1
+           taiga-project-name: Serviço 1
 ```
 
 O middleware busca a entidade do chamado no GLPI, localiza o mapeamento correspondente e cria a issue no projeto Taiga configurado. Se não encontrar mapeamento, usa o projeto `fallback-project-name`.
+
+---
+
+# Mapeamento de status do Taiga
+
+Por padrão, o Taiga envia os nomes de status em inglês (ex.: `In progress`, `Done`). O middleware permite traduzir esses valores para qualquer texto antes de gravá-los no campo **Status do chamado** do GLPI.
+
+O mapeamento é configurado em `config/application.yaml` sob a chave `glpi.status-map`:
+
+```yaml
+glpi:
+   status-map:
+      - taiga: New
+        glpi: Novo
+      - taiga: In progress
+        glpi: Em andamento
+      - taiga: Ready for test
+        glpi: Pronto para teste
+      - taiga: Done
+        glpi: Concluído
+      - taiga: Archived
+        glpi: Arquivado
+      - taiga: Closed
+        glpi: Fechado
+      - taiga: Needs info
+        glpi: Aguardando informação
+      - taiga: Rejected
+        glpi: Rejeitado
+      - taiga: Postponed
+        glpi: Adiado
+      - taiga: Ready
+        glpi: Preparado
+```
+
+- O campo `taiga` deve ser o nome **exato** do status como aparece no Taiga (case-insensitive).
+- O campo `glpi` é o texto que será gravado no campo **Status do chamado** do GLPI.
+- Se um status recebido do Taiga não tiver entrada no mapa, o valor original é gravado sem alteração e um aviso é registrado no log.
+- Adicione ou remova entradas conforme os status configurados nos seus projetos do Taiga.
+
+> **Dica:** para descobrir o nome exato de um status customizado, verifique em `Settings > Issues > Issue statuses` no projeto do Taiga ou observe o log do middleware ao receber um webhook com o status desejado.
 
 ---
 
