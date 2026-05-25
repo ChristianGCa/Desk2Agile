@@ -557,7 +557,7 @@ public class GlpiIntegrationService {
      * nas relações (traz o array de usuários desatualizado).
      */
     public boolean isUserAssignedToTicket(Long ticketId, String wantedAssignee, String sessionToken) {
-        log.warn("GLPI SERVICE - Buscando usuários atribuídos via API para o ticket {}.", ticketId);
+        log.debug("GLPI SERVICE - Buscando usuários atribuídos via API para o ticket {}.", ticketId);
         String uri = glpiApiUrl + "/Ticket_User?searchText[tickets_id]=" + ticketId;
         try {
             List<Map<String, Object>> records = restClient.get()
