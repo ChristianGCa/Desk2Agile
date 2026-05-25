@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.concurrent.RejectedExecutionException;
 
@@ -167,7 +168,7 @@ public class WebhookController {
             return true;
         }
         String expected = "Bearer " + configured;
-        return expected.equals(authHeader);
+        return MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), authHeader.getBytes(StandardCharsets.UTF_8));
     }
 
     /**

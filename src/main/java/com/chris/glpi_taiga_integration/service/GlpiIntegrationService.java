@@ -550,4 +550,64 @@ public class GlpiIntegrationService {
         Long itemsId = getRequiredLong(rawRecord, "items_id");
         return new GlpiPluginFieldsRecord(id, itemsId, null, null);
     }
+
+    /**
+     * Busca na API do GLPI se um usuário específico está atribuído ao ticket.
+     * Necessário pois o payload do webhook de atualização frequentemente sofre de atraso (lag)
+     * nas relações (traz o array de usuários desatualizado).
+     */
+    public boolean isUserAssignedToTicket(Long ticketId, String wantedAssignee, String sessionToken) {
+        log.warn("GLPI SERVICE - Buscando usuários atribuídos via API para o ticket {}.", ticketId);
+        String uri = glpiApiUrl + "/Ticket_User?searchText[tickets_id]=" + ticketId;
+        try {
+            List<Map<String, Object>> records = restClient.get()
+                    .uri(uri)
+                    .header("Session-Token", sessionToken)
+                    .header("App-Token", glpiAppToken)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
+
+            if (records == null || records.isEmpty()) return false;
+
+            for (Map<String, Object> record : records) {
+                Object typeObj = record.get("type");
+                // type = 2 significa "Atribuído" (Assignee)
+                if (typeObj != null && "2".equals(String.valueOf(typeObj))) {
+                    Object userIdObj = record.get("users_id");
+                    if (userIdObj != null) {
+                        long userId = Long.parseLong(String.valueOf(userIdObj));
+                        String userUri = glpiApiUrl + "/User/" + userId;
+                        try {
+                            Map<String, Object> userRecord = restClient.get()
+                                    .uri(userUri)
+                                    .header("Session-Token", sessionToken)
+                                    .header("App-Token", glpiAppToken)
+                                    .retrieve()
+                                    .body(new ParameterizedTypeReference<>() {});
+
+                            if (userRecord != null) {
+                                String name = String.valueOf(userRecord.get("name"));
+                                String realname = String.valueOf(userRecord.get("realname"));
+                                String firstname = String.valueOf(userRecord.get("firstname"));
+
+                                if (wantedAssignee.equalsIgnoreCase(name) ||
+                                        wantedAssignee.equalsIgnoreCase(realname) ||
+                                        wantedAssignee.equalsIgnoreCase(firstname)) {
+                                    return true;
+                                }
+                            }
+                        } catch (RestClientResponseException e) {
+                            if (e.getStatusCode().is4xxClientError() && e.getResponseBodyAsString().contains("ERROR_RESOURCE_NOT_FOUND_NOR_COMMONDBTM")) {
+                                continue;
+                            }
+                            throw e;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("GLPI SERVICE - Erro ao verificar Ticket_User via API para o ticket {}: {}", ticketId, e.getMessage());
+        }
+        return false;
+    }
 }

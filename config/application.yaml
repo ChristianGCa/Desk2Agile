@@ -139,7 +139,7 @@ logging:
   level:
     com:
       chris:
-        glpi_taiga_integration: INFO # troque para DEBUG para diagnóstico detalhado
+        glpi_taiga_integration: DEBUG # troque para DEBUG para diagnóstico detalhado
 
   # Log em arquivo - ativado no Docker via variável LOG_FILE.
   # Para desativar: remova LOG_FILE do .env ou deixe em branco (LOG_FILE=).
