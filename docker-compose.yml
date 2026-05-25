@@ -9,10 +9,12 @@ services:
     env_file:
       - .env
     environment:
+      - PUID=1000
+      - PGID=1000
       # Log em arquivo: defina o caminho para ativar, deixe vazio para desativar.
       # Se omitido aqui, usa o padrão do config/application.yaml (/app/logs/app.log).
       # LOG_FILE=          # desativa o log em arquivo
-      LOG_FILE: /app/logs/app.log
+      - LOG_FILE=/app/logs/app.log
     volumes:
       - ./logs:/app/logs
       - ./certs:/app/certs:ro
