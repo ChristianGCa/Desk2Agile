@@ -167,6 +167,10 @@ public class WebhookController {
             log.warn("GLPI webhook token não configurado — validação desabilitada.");
             return true;
         }
+        if (authHeader == null || authHeader.isBlank()) {
+            // Cabeçalho ausente → inválido
+            return false;
+        }
         String expected = "Bearer " + configured;
         return MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), authHeader.getBytes(StandardCharsets.UTF_8));
     }

@@ -9,16 +9,18 @@ services:
     env_file:
       - .env
     environment:
-      - PUID=1000
-      - PGID=1000
       # Log em arquivo: defina o caminho para ativar, deixe vazio para desativar.
-      # Se omitido aqui, usa o padrão do config/application.yaml (/app/logs/app.log).
-      # LOG_FILE=          # desativa o log em arquivo
+      # LOG_FILE=    # desativa o log em arquivo
       - LOG_FILE=/app/logs/app.log
     volumes:
-      - ./logs:/app/logs
+      - logs:/app/logs              # named volume: Docker gerencia permissões automaticamente
       - ./certs:/app/certs:ro
-      # Este arquivo sobrescreve o yaml embutido no JAR
       - ./config/application.yaml:/app/config/application.yaml:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+volumes:
+  logs:
+    # Para inspecionar os logs:
+    # docker exec chamataiga tail -f /app/logs/app.log
+    # docker exec chamataiga cat /app/logs/integration_failures.log

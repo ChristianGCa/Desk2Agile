@@ -48,8 +48,8 @@ glpi:
     # Nomes dos campos dentro dos blocos do plugin Fields do GLPI
     # Coloque os mesmos nomes que definiu no GLPI
     private-fields:
-      id-taiga: ID Taiga
-      link-taiga: Link Taiga
+      id-taiga: ID da Issue
+      link-taiga: Link da Issue
 
     public-fields:
       status-chamado: Status do chamado

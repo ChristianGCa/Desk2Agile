@@ -18,11 +18,13 @@ WORKDIR /app
 COPY --from=builder /app/target/*.jar app.jar
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
-RUN apk add --no-cache su-exec shadow \
-    && addgroup -S appgroup && adduser -S appuser -G appgroup \
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
     && chmod +x /app/docker-entrypoint.sh \
     && mkdir -p /app/certs /app/logs \
+    && cp "$JAVA_HOME/lib/security/cacerts" /app/truststore.jks \
     && chown -R appuser:appgroup /app
+
+USER appuser
 
 EXPOSE 8081
 

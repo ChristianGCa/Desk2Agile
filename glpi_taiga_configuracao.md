@@ -198,23 +198,23 @@ Este bloco armazena os dados internos da integração com o Taiga e é visível 
 
 | Campo | Valor |
 |---|---|
-| Rótulo | ID Taiga |
+| Rótulo | ID da Issue |
 | Tipo | Número |
 | Somente leitura | Sim |
 | Campo obrigatório | Não |
 
-> Identificador numérico da issue no Taiga. Nome na API: `idtaigafield`.
+> Identificador numérico da issue no Taiga.
 
 ### Campo: Link Taiga
 
 | Campo | Valor |
 |---|---|
-| Rótulo | Link Taiga |
+| Rótulo | Link da Issue |
 | Tipo | URL |
 | Somente leitura | Sim |
 | Campo obrigatório | Não |
 
-> URL direta para a issue no Taiga. Nome na API: `linktaigafield`.
+> URL direta para a issue no Taiga.
 > Caso o tipo URL apresente erro no GLPI, utilize o tipo Texto.
 
 ---
