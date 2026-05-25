@@ -10,6 +10,7 @@ import com.chris.glpi_taiga_integration.dto.TaigaPromotedToChange;
 import com.chris.glpi_taiga_integration.dto.TaigaUserStoryDetailsResponse;
 import com.chris.glpi_taiga_integration.dto.TaigaWebhookPayload;
 import com.chris.glpi_taiga_integration.exception.IntegrationAuthenticationException;
+import com.chris.glpi_taiga_integration.config.StatusTranslator;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -41,6 +42,7 @@ public class IntegrationService {
     private final GlpiIntegrationService glpiIntegrationService;
     private final ProjectRoutingService projectRoutingService;
     private final FailureLogService failureLogService;
+    private final StatusTranslator statusTranslator;
 
     // Lock listrado para mitigar concorrência local baseada no ID do ticket.
     private final Object[] locks = new Object[LOCK_STRIPES];
@@ -61,11 +63,13 @@ public class IntegrationService {
             TaigaIntegrationService taigaIntegrationService,
             GlpiIntegrationService glpiIntegrationService,
             ProjectRoutingService projectRoutingService,
-            FailureLogService failureLogService) {
+            FailureLogService failureLogService,
+            StatusTranslator statusTranslator) {
         this.taigaIntegrationService = taigaIntegrationService;
         this.glpiIntegrationService = glpiIntegrationService;
         this.projectRoutingService = projectRoutingService;
         this.failureLogService = failureLogService;
+        this.statusTranslator = statusTranslator;
 
         for (int i = 0; i < LOCK_STRIPES; i++) {
             locks[i] = new Object();
@@ -540,7 +544,7 @@ public class IntegrationService {
         String statusNome = String.valueOf(us.statusId());
 
         if (statusResponse != null) {
-            statusNome = statusResponse.name();
+            statusNome = statusTranslator.translate(statusResponse.name());
         }
 
         String dataPrevista = null;
@@ -582,7 +586,7 @@ public class IntegrationService {
         }
 
         Long ticketId = glpiTicketId.get();
-        String statusNome = issue.status().name();
+        String statusNome = statusTranslator.translate(issue.status().name());
 
         Optional<GlpiPluginFieldsRecord> record =
                 glpiIntegrationService.getPluginFieldsRecord(
@@ -698,7 +702,7 @@ public class IntegrationService {
         }
 
         Long ticketId = glpiTicketId.get();
-        String statusName = us.status().name();
+        String statusName = statusTranslator.translate(us.status().name());
 
         String expectedDate = null;
 
