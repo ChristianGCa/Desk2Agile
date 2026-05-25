@@ -194,27 +194,27 @@ Este bloco armazena os dados internos da integração com o Taiga e é visível 
 
 ## 7. Campos do bloco "Informações do Taiga"
 
-### Campo: ID Taiga
+### Campo: ID da Issue
 
 | Campo | Valor |
 |---|---|
-| Rótulo | ID Taiga |
+| Rótulo | ID da Issue |
 | Tipo | Número |
 | Somente leitura | Sim |
 | Campo obrigatório | Não |
 
-> Identificador numérico da issue no Taiga. Nome na API: `idtaigafield`.
+> Identificador numérico da issue no Taiga.
 
-### Campo: Link Taiga
+### Campo: Link da Issue
 
 | Campo | Valor |
 |---|---|
-| Rótulo | Link Taiga |
+| Rótulo | Link da Issue |
 | Tipo | URL |
 | Somente leitura | Sim |
 | Campo obrigatório | Não |
 
-> URL direta para a issue no Taiga. Nome na API: `linktaigafield`.
+> URL direta para a issue no Taiga.
 > Caso o tipo URL apresente erro no GLPI, utilize o tipo Texto.
 
 ---
@@ -225,8 +225,8 @@ Este bloco armazena os dados internos da integração com o Taiga e é visível 
 |---|---|---|---|---|
 | Progresso do chamado | Todos | Status do chamado | Texto (múltiplas linhas) | `statusdochamadofield` |
 | Progresso do chamado | Todos | Data prevista | Data | `dataprevistafield` |
-| Informações do Taiga | Equipe | ID Taiga | Número | `idtaigafield` |
-| Informações do Taiga | Equipe | Link Taiga | URL | `linktaigafield` |
+| Informações do Taiga | Equipe | ID da Issue | Número | `iddaissuefield` |
+| Informações do Taiga | Equipe | Link da Issue | URL | `linkdaissuefield` |
 
 > Os nomes na API são gerados automaticamente pelo middleware a partir dos rótulos configurados no `application.yaml`: remove acentos, espaços e caracteres especiais, converte para minúsculas e adiciona o sufixo `field`. Se você usar rótulos diferentes dos padrões acima, atualize `glpi.plugin-fields.*` no `application.yaml` de acordo.
 

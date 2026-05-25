@@ -26,15 +26,15 @@ Middleware em `Spring Boot` para integrar `GLPI` e `Taiga` via webhooks.
 
 | Bloco | Visibilidade | Campos |
 |---|---|---|
-| **Informações do Taiga** | Equipe (privado) | ID Taiga, Link Taiga |
+| **Informações do Taiga** | Equipe (privado) | ID da Issue, Link da Issue |
 | **Progresso do chamado** | Todos (público) | Status do chamado, Data prevista |
 
 Os nomes dos campos são convertidos automaticamente para o formato da API do plugin Fields (sem acentos, sem espaços, com sufixo `field`). Exemplos:
 
 | Nome no GLPI | Nome na API |
 |---|---|
-| ID Taiga | `idtaigafield` |
-| Link Taiga | `linktaigafield` |
+| ID da Issue | `iddaissuefield` |
+| Link da Issue | `linkdaissuefield` |
 | Status do chamado | `statusdochamadofield` |
 | Data prevista | `dataprevistafield` |
 
@@ -176,7 +176,7 @@ Para incluir os testes no build:
 ### Build da imagem Docker
 
 ```bash
-docker build -t glpi-taiga-middleware:latest .
+docker build -t chamataiga:latest .
 ```
 
 A imagem usa build multi-stage: compila o JAR em uma imagem JDK e o executa em uma imagem JRE menor (`eclipse-temurin:21-jre-alpine`).
@@ -197,14 +197,14 @@ Certifique-se de ter o `.env` preenchido e a imagem construída, depois:
 
 ```bash
 docker run -d \
-  --name glpi-taiga-middleware \
+  --name chamataiga \
   --restart unless-stopped \
   -p 8081:8081 \
   --env-file .env \
   -v "$(pwd)/config/application.yaml:/app/config/application.yaml:ro" \
-  -v "$(pwd)/logs:/app/logs" \
+  -v glpi-taiga-logs:/app/logs \
   -v "$(pwd)/certs:/app/certs:ro" \
-  glpi-taiga-middleware:latest
+  chamataiga:latest
 ```
 
 ### Via Docker Compose (recomendado para produção)
@@ -222,14 +222,20 @@ docker compose down
 
 O `docker-compose.yml` já monta:
 - `./config/application.yaml` → sobrescreve o YAML embutido no JAR
-- `./logs` → persiste os logs em arquivo
+- `logs` (named volume) → persiste os logs; Docker gerencia permissões automaticamente, sem setup no host
 - `./certs` → certificados customizados importados automaticamente no truststore da JVM
+
+Para acompanhar os logs em tempo real:
+
+```bash
+docker exec chamataiga tail -f /app/logs/app.log
+```
 
 ### Rebuild e restart (após mudanças de código)
 
 ```bash
 docker compose down
-docker build -t glpi-taiga-middleware:latest .
+docker build -t chamataiga:latest .
 docker compose up -d
 ```
 

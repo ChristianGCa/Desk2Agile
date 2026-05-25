@@ -2,7 +2,6 @@ package com.chris.glpi_taiga_integration.service;
 
 import com.chris.glpi_taiga_integration.dto.GlpiItem;
 import com.chris.glpi_taiga_integration.dto.GlpiPluginFieldsRecord;
-import com.chris.glpi_taiga_integration.dto.GlpiTeamMember;
 import com.chris.glpi_taiga_integration.dto.GlpiWebhookPayload;
 import com.chris.glpi_taiga_integration.dto.TaigaIssueData;
 import com.chris.glpi_taiga_integration.dto.TaigaIssueResponse;
@@ -19,7 +18,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * Serviço centralizador da integração bidirecional entre GLPI e Taiga.
+ * Serviço que centraliza a integração entre GLPI e Taiga.
  * Gerencia o fluxo de criação de issues e sincronização de progresso via Webhooks.
  * Processamento assíncrono: os métodos públicos {@link #processGlpiWebhook} e
  * {@link #processTaigaWebhook} são chamados pelo {@code WebhookController} dentro de
@@ -44,7 +43,6 @@ public class IntegrationService {
     private final FailureLogService failureLogService;
     private final StatusTranslator statusTranslator;
 
-    // Lock listrado para mitigar concorrência local baseada no ID do ticket.
     private final Object[] locks = new Object[LOCK_STRIPES];
 
     @Value("${glpi.api.category-that-send-to-taiga:}")
@@ -56,9 +54,6 @@ public class IntegrationService {
     @Value("${integration.auth.max-retries:1}")
     private int maxAuthRetries;
 
-    /**
-     * Construtor da classe. Inicializa as dependências e a estrutura de travas locais.
-     */
     public IntegrationService(
             TaigaIntegrationService taigaIntegrationService,
             GlpiIntegrationService glpiIntegrationService,
@@ -79,9 +74,7 @@ public class IntegrationService {
     /**
      * Processa os payloads recebidos do webhook do GLPI.
      * Filtra tickets elegíveis e aplica concorrência isolada por ID.
-     *
-     * <p>Chamado pelo controller dentro de uma task do {@code webhookExecutor}.
-     *
+     * Chamado pelo controller dentro de uma task do {@code webhookExecutor}.
      * @param payload Dados enviados pelo gatilho do GLPI.
      */
     public void processGlpiWebhook(GlpiWebhookPayload payload) {
@@ -91,7 +84,6 @@ public class IntegrationService {
             logIgnoredTicket(item);
             return;
         }
-
         Long ticketId = item.id();
         int lockIndex = (ticketId.hashCode() & Integer.MAX_VALUE) % LOCK_STRIPES;
 
@@ -161,7 +153,8 @@ public class IntegrationService {
     }
 
     /**
-     * Varre os membros atribuídos ao ticket buscando correspondência com o técnico alvo configurado.
+     * Consulta diretamente na API se o técnico alvo está atribuído ao ticket.
+     * Ignora completamente a lista de equipe no payload devido ao atraso do webhook do GLPI.
      */
     private boolean assigneeMatches(GlpiItem item) {
         if (assigneeThatSendToTaiga == null) {
@@ -178,57 +171,8 @@ public class IntegrationService {
             return true;
         }
 
-        List<GlpiTeamMember> team = item.team();
-
-        for (GlpiTeamMember member : team) {
-            if (!isAssignedMember(member)) {
-                continue;
-            }
-
-            if (matchesAssignee(member.name(), wantedAssignee)) {
-                return true;
-            }
-
-            if (matchesAssignee(member.displayName(), wantedAssignee)) {
-                return true;
-            }
-
-            if (matchesAssignee(member.realName(), wantedAssignee)) {
-                return true;
-            }
-
-            if (matchesAssignee(member.firstName(), wantedAssignee)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Verifica se o membro da equipe possui o papel explícito de atribuído ("assigned").
-     */
-    private boolean isAssignedMember(GlpiTeamMember member) {
-        if (member == null) {
-            return false;
-        }
-
-        if (member.role() == null) {
-            return false;
-        }
-
-        return "assigned".equalsIgnoreCase(member.role().trim());
-    }
-
-    /**
-     * Compara strings limpando espaços e ignorando maiúsculas/minúsculas.
-     */
-    private boolean matchesAssignee(String value, String wantedAssignee) {
-        if (value == null) {
-            return false;
-        }
-
-        return wantedAssignee.equalsIgnoreCase(value.trim());
+        String sessionToken = glpiIntegrationService.initSession();
+        return glpiIntegrationService.isUserAssignedToTicket(item.id(), wantedAssignee, sessionToken);
     }
 
     /**
@@ -396,9 +340,7 @@ public class IntegrationService {
         return true;
     }
 
-    // -------------------------------------------------------------------------
     // Taiga Webhook
-    // -------------------------------------------------------------------------
 
     /**
      * Processa payloads vindos do webhook do Taiga.

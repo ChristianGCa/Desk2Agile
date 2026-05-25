@@ -27,8 +27,8 @@ glpi:
     private-ticket-status-block-name: Informações do Taiga
     public-ticket-status-block-name: Progresso do chamado
     private-fields:
-      id-taiga: ID Taiga
-      link-taiga: Link Taiga
+      id-taiga: ID da Issue
+      link-taiga: Link da Issue
     public-fields:
       status-chamado: Status do chamado
       data-prevista: Conclusão prevista

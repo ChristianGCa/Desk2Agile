@@ -2,10 +2,10 @@
 set -e
 
 CERTS_DIR="/app/certs"
-JAVA_CACERTS="$JAVA_HOME/lib/security/cacerts"
+TRUSTSTORE="/app/truststore.jks"
 TRUSTSTORE_PASS="changeit"
 
-# Importa certificados customizados se a pasta /app/certs existir e tiver arquivos .crt
+# Importa certificados customizados para o truststore local (não requer root)
 if [ -d "$CERTS_DIR" ]; then
     for cert in "$CERTS_DIR"/*.crt "$CERTS_DIR"/*.pem; do
         [ -f "$cert" ] || continue
@@ -16,10 +16,14 @@ if [ -d "$CERTS_DIR" ]; then
             -trustcacerts \
             -alias "$alias" \
             -file "$cert" \
-            -keystore "$JAVA_CACERTS" \
+            -keystore "$TRUSTSTORE" \
             -storepass "$TRUSTSTORE_PASS" 2>/dev/null || \
             echo "[entrypoint] AVISO: falha ao importar $cert (já existe ou inválido)"
     done
 fi
 
-exec java $JAVA_OPTS -jar /app/app.jar "$@"
+exec java \
+    -Djavax.net.ssl.trustStore="$TRUSTSTORE" \
+    -Djavax.net.ssl.trustStorePassword="$TRUSTSTORE_PASS" \
+    $JAVA_OPTS \
+    -jar /app/app.jar "$@"

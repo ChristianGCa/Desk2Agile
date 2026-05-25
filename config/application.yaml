@@ -48,8 +48,8 @@ glpi:
     # Nomes dos campos dentro dos blocos do plugin Fields do GLPI
     # Coloque os mesmos nomes que definiu no GLPI
     private-fields:
-      id-taiga: ID Taiga
-      link-taiga: Link Taiga
+      id-taiga: ID da Issue
+      link-taiga: Link da Issue
 
     public-fields:
       status-chamado: Status do chamado
@@ -139,7 +139,7 @@ logging:
   level:
     com:
       chris:
-        glpi_taiga_integration: INFO # troque para DEBUG para diagnóstico detalhado
+        glpi_taiga_integration: DEBUG # troque para DEBUG para diagnóstico detalhado
 
   # Log em arquivo - ativado no Docker via variável LOG_FILE.
   # Para desativar: remova LOG_FILE do .env ou deixe em branco (LOG_FILE=).
