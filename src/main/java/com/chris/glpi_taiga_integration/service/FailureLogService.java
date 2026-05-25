@@ -43,45 +43,17 @@ public class FailureLogService {
         try {
             Path path = Paths.get(logFile);
 
-            // Cria o arquivo se não existir (e diretórios pai se necessário)
-            if (!Files.exists(path)) {
-                if (path.getParent() != null) {
-                    Files.createDirectories(path.getParent());
-                }
-                Files.createFile(path);
-                log.info("Arquivo de log de falhas criado: {}", logFile);
+            // Garante que o diretório pai exista
+            if (path.getParent() != null) {
+                Files.createDirectories(path.getParent());
             }
 
-            // Escreve a entrada no final do arquivo
-            Files.writeString(path, entry, StandardOpenOption.APPEND);
+            // Escreve a entrada no final do arquivo criando-o atomicamente se necessário
+            Files.writeString(path, entry, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 
         } catch (IOException ioException) {
             log.error("Falha crítica ao tentar escrever no arquivo de log de falhas ({}): {}", logFile, ioException.getMessage());
         }
     }
 
-    /**
-     * Registra uma falha com uma mensagem customizada, sem necessariamente uma exceção.
-     *
-     * @param context Descrição do contexto
-     * @param message Mensagem de erro
-     */
-    public void logFailure(String context, String message) {
-        String timestamp = LocalDateTime.now().format(formatter);
-        String entry = String.format("[%s] CONTEXTO: %s | MENSAGEM: %s%n",
-                timestamp, context, message);
-
-        try {
-            Path path = Paths.get(logFile);
-            if (!Files.exists(path)) {
-                if (path.getParent() != null) {
-                    Files.createDirectories(path.getParent());
-                }
-                Files.createFile(path);
-            }
-            Files.writeString(path, entry, StandardOpenOption.APPEND);
-        } catch (IOException ioException) {
-            log.error("Falha crítica ao tentar escrever no arquivo de log de falhas ({}): {}", logFile, ioException.getMessage());
-        }
-    }
 }
