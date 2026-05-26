@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.chris.glpi_taiga_integration.config.IpAllowlistFilter;
 import com.chris.glpi_taiga_integration.config.WebhookSecurityProperties;
 import com.chris.glpi_taiga_integration.exception.GlpiPluginFieldsException;
-import com.chris.glpi_taiga_integration.service.FailureLogService;
 import com.chris.glpi_taiga_integration.service.IntegrationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

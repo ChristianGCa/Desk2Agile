@@ -8,19 +8,8 @@ services:
       - "8081:8081"
     env_file:
       - .env
-    environment:
-      # Log em arquivo: defina o caminho para ativar, deixe vazio para desativar.
-      # LOG_FILE=    # desativa o log em arquivo
-      - LOG_FILE=/app/logs/app.log
     volumes:
-      - logs:/app/logs              # named volume: Docker gerencia permissões automaticamente
       - ./certs:/app/certs:ro
       - ./config/application.yaml:/app/config/application.yaml:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
-
-volumes:
-  logs:
-    # Para inspecionar os logs:
-    # docker exec chamataiga tail -f /app/logs/app.log
-    # docker exec chamataiga cat /app/logs/integration_failures.log

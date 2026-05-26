@@ -23,7 +23,7 @@ import org.springframework.stereotype.Service;
  * Processamento assíncrono: os métodos públicos {@link #processGlpiWebhook} e
  * {@link #processTaigaWebhook} são chamados pelo {@code WebhookController} dentro de
  * tasks submetidas ao {@code webhookExecutor}. O controller responde 202 imediatamente;
- * erros são capturados lá e registrados via {@link FailureLogService}.
+ * erros são capturados lá e registrados via SLF4J.
  * Compensação em falha parcial: se a issue Taiga for criada mas a atualização
  * do GLPI falhar, a issue é deletada automaticamente antes de propagar a exceção.
  * O {@code syncExternalProgress} (atualização de status) é best-effort: falhas são
@@ -40,7 +40,6 @@ public class IntegrationService {
     private final TaigaIntegrationService taigaIntegrationService;
     private final GlpiIntegrationService glpiIntegrationService;
     private final ProjectRoutingService projectRoutingService;
-    private final FailureLogService failureLogService;
     private final StatusTranslator statusTranslator;
 
     private final Object[] locks = new Object[LOCK_STRIPES];
@@ -58,12 +57,10 @@ public class IntegrationService {
             TaigaIntegrationService taigaIntegrationService,
             GlpiIntegrationService glpiIntegrationService,
             ProjectRoutingService projectRoutingService,
-            FailureLogService failureLogService,
             StatusTranslator statusTranslator) {
         this.taigaIntegrationService = taigaIntegrationService;
         this.glpiIntegrationService = glpiIntegrationService;
         this.projectRoutingService = projectRoutingService;
-        this.failureLogService = failureLogService;
         this.statusTranslator = statusTranslator;
 
         for (int i = 0; i < LOCK_STRIPES; i++) {
@@ -218,7 +215,7 @@ public class IntegrationService {
      *       a issue é deletada automaticamente antes de propagar a exceção. Isso garante
      *       que não fiquem issues órfãs no Taiga sem correspondência no GLPI.
      *       Na eventualidade de a deleção também falhar, o erro é registrado no
-     *       {@code integration_failures.log} com o ID da issue Taiga para limpeza manual.</li>
+     *       em log com o ID da issue Taiga para limpeza manual.</li>
      *   <li>{@code syncExternalProgress} (atualização de status) é best-effort: falhas
      *       são registradas mas não desfazem o vínculo GLPI↔Taiga já gravado.</li>
      * </ul>
@@ -280,8 +277,7 @@ public class IntegrationService {
                     "GLPI - Falha ao sincronizar status inicial do ticket {}. "
                             + "Vínculo GLPI↔Taiga gravado, mas status não atualizado. Issue Taiga: {}",
                     ticketId, taigaIssue.id());
-            failureLogService.logFailure(
-                    "Sync status inicial ticket " + ticketId + " (issue Taiga " + taigaIssue.id() + ")", e);
+            log.warn("GLPI - Sync status inicial falhou para ticket {} (issue Taiga {}). Stack trace:", ticketId, taigaIssue.id(), e);
             // não re-lança: o vínculo principal já está salvo
         }
 
@@ -306,8 +302,7 @@ public class IntegrationService {
             log.error(
                     "GLPI - Compensação falhou: issue Taiga {} NÃO foi deletada. Limpeza manual necessária.",
                     taigaIssueId, ex);
-            failureLogService.logFailure(
-                    "Compensação: delete manual necessário da issue Taiga " + taigaIssueId, ex);
+
         }
     }
 
@@ -694,7 +689,7 @@ public class IntegrationService {
         }
 
         if (lastException != null) {
-            failureLogService.logFailure("Esgotadas as tentativas de autenticação", lastException);
+            log.error("Esgotadas as tentativas de autenticação após {} tentativa(s).", maxAuthRetries + 1, lastException);
             throw lastException;
         }
     }

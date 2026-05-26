@@ -1,5 +1,5 @@
-#  Defaults embutidos (não edite para deploys)
-#  Para customizar, edite config/application.yaml no host
+#  ChamaTaiga — defaults embutidos (não edite para deploys)
+#  Para customizar, edite config/application.yaml no host.
 
 server:
   port: 8081
@@ -24,18 +24,17 @@ glpi:
     assignee-that-send-to-taiga:
 
   plugin-fields:
-    private-ticket-status-block-name: Informações do Taiga
-    public-ticket-status-block-name: Progresso do chamado
+    private-ticket-status-block-name: Equipe
+    public-ticket-status-block-name: Chamado Progresso
     status-inicial: Novo
     private-fields:
-      id-taiga: ID Taiga
-      link-taiga: Link Taiga
+      id-taiga: ID numero
+      link-taiga: Link
     public-fields:
-      status-chamado: Status do Chamado
-      data-prevista: Data prevista
+      status-chamado: Status Chamado
+      data-prevista: Data chamado
 
-  # status-map intencionalmente vazio — defaults estão em StatusTranslator.java.
-  # Declare entradas aqui SOMENTE para sobrescrever ou adicionar status customizados.
+  # status-map intencionalmente vazio. Defaults estão em StatusTranslator.java.
   status-map: []
 
   entities:
@@ -63,12 +62,3 @@ integration:
 logging:
   level:
     com.chris.glpi_taiga_integration: INFO
-  file:
-    name: ${LOG_FILE:}
-  logback:
-    rollingpolicy:
-      max-file-size: 10MB
-      max-history: 30
-      total-size-cap: 200MB
-  integration:
-    failure-file: integration_failures.log
