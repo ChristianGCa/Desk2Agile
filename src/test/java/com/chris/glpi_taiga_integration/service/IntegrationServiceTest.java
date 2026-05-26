@@ -1,6 +1,7 @@
 package com.chris.glpi_taiga_integration.service;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -10,7 +11,6 @@ import static org.mockito.Mockito.when;
 import com.chris.glpi_taiga_integration.dto.GlpiCategory;
 import com.chris.glpi_taiga_integration.dto.GlpiItem;
 import com.chris.glpi_taiga_integration.dto.GlpiPluginFieldsRecord;
-import com.chris.glpi_taiga_integration.dto.GlpiTeamMember;
 import com.chris.glpi_taiga_integration.dto.GlpiWebhookPayload;
 import com.chris.glpi_taiga_integration.dto.TaigaIssueData;
 import com.chris.glpi_taiga_integration.dto.TaigaIssueResponse;
@@ -31,38 +31,27 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class IntegrationServiceTest {
 
-    @Mock
-    private TaigaIntegrationService taigaIntegrationService;
-
-    @Mock
-    private GlpiIntegrationService glpiIntegrationService;
-
-    @Mock
-    private ProjectRoutingService projectRoutingService;
-
-    // FIX: FailureLogService é exigido pelo construtor — sem ele, Mockito usa Objenesis
-    // e o array locks[] nunca é inicializado → NullPointerException
-    @Mock
-    private FailureLogService failureLogService;
+    @Mock private TaigaIntegrationService taigaIntegrationService;
+    @Mock private GlpiIntegrationService glpiIntegrationService;
+    @Mock private ProjectRoutingService projectRoutingService;
 
     @InjectMocks
     private IntegrationService integrationService;
 
     @BeforeEach
     void setUp() {
-        // Ambos os gatilhos desligados por padrão; cada teste ativa o que precisa
         ReflectionTestUtils.setField(integrationService, "categoryThatSendToTaiga", "");
         ReflectionTestUtils.setField(integrationService, "assigneeThatSendToTaiga", "");
-        // FIX: @Value não é processado em testes Mockito puros — maxAuthRetries fica 0 (default de int)
-        // Definir explicitamente para corresponder ao default da aplicação
         ReflectionTestUtils.setField(integrationService, "maxAuthRetries", 1);
     }
 
+    // -------------------------------------------------------------------------
+    // Filtragem por categoria
+    // -------------------------------------------------------------------------
+
     @Test
     void processaGlpi_ambosGatilhosDesligados_ignoraTicket() {
-        var payload = payloadComCategoria("Desenvolvimento");
-
-        integrationService.processGlpiWebhook(payload);
+        integrationService.processGlpiWebhook(payloadComCategoria("Desenvolvimento"));
 
         verifyNoInteractions(glpiIntegrationService);
         verifyNoInteractions(taigaIntegrationService);
@@ -71,10 +60,9 @@ class IntegrationServiceTest {
     @Test
     void processaGlpi_categoriaWildcard_processaQualquerCategoria() {
         ReflectionTestUtils.setField(integrationService, "categoryThatSendToTaiga", "*");
-        configurarMocksParaFluxoCompleto();
-        var payload = payloadComCategoria("Qualquer Coisa");
+        configurarMocksFluxoCompleto();
 
-        integrationService.processGlpiWebhook(payload);
+        integrationService.processGlpiWebhook(payloadComCategoria("Qualquer Coisa"));
 
         verify(glpiIntegrationService, times(1)).initSession();
     }
@@ -82,21 +70,19 @@ class IntegrationServiceTest {
     @Test
     void processaGlpi_categoriaEspecificaCorresponde_processa() {
         ReflectionTestUtils.setField(integrationService, "categoryThatSendToTaiga", "Desenvolvimento");
-        configurarMocksParaFluxoCompleto();
-        var payload = payloadComCategoria("Desenvolvimento");
+        configurarMocksFluxoCompleto();
 
-        integrationService.processGlpiWebhook(payload);
+        integrationService.processGlpiWebhook(payloadComCategoria("Desenvolvimento"));
 
         verify(glpiIntegrationService, times(1)).initSession();
     }
 
     @Test
-    void processaGlpi_categoriaEspecificaIgnoraCase_processa() {
+    void processaGlpi_categoriaIgnoraCase_processa() {
         ReflectionTestUtils.setField(integrationService, "categoryThatSendToTaiga", "desenvolvimento");
-        configurarMocksParaFluxoCompleto();
-        var payload = payloadComCategoria("DESENVOLVIMENTO");
+        configurarMocksFluxoCompleto();
 
-        integrationService.processGlpiWebhook(payload);
+        integrationService.processGlpiWebhook(payloadComCategoria("DESENVOLVIMENTO"));
 
         verify(glpiIntegrationService, times(1)).initSession();
     }
@@ -104,9 +90,8 @@ class IntegrationServiceTest {
     @Test
     void processaGlpi_categoriaDiferente_ignoraTicket() {
         ReflectionTestUtils.setField(integrationService, "categoryThatSendToTaiga", "Desenvolvimento");
-        var payload = payloadComCategoria("Suporte");
 
-        integrationService.processGlpiWebhook(payload);
+        integrationService.processGlpiWebhook(payloadComCategoria("Suporte"));
 
         verifyNoInteractions(glpiIntegrationService);
     }
@@ -115,74 +100,69 @@ class IntegrationServiceTest {
     void processaGlpi_semCategoria_gatilhoCategoriaAtivo_ignoraTicket() {
         ReflectionTestUtils.setField(integrationService, "categoryThatSendToTaiga", "Desenvolvimento");
         var item = new GlpiItem(1L, "Ticket", "Conteúdo", null, null, List.of());
-        var payload = new GlpiWebhookPayload("add", item);
 
-        integrationService.processGlpiWebhook(payload);
+        integrationService.processGlpiWebhook(new GlpiWebhookPayload("add", item));
 
         verifyNoInteractions(glpiIntegrationService);
     }
 
-    @Test
-    void processaGlpi_tecnicoCorresponde_processa() {
-        ReflectionTestUtils.setField(integrationService, "assigneeThatSendToTaiga", "tecnico1");
-        configurarMocksParaFluxoCompleto();
-        var payload = payloadComTecnico("tecnico1");
-
-        integrationService.processGlpiWebhook(payload);
-
-        verify(glpiIntegrationService, times(1)).initSession();
-    }
+    // -------------------------------------------------------------------------
+    // Filtragem por técnico (usa API — não o payload)
+    // -------------------------------------------------------------------------
 
     @Test
     void processaGlpi_tecnicoWildcard_processaSempre() {
         ReflectionTestUtils.setField(integrationService, "assigneeThatSendToTaiga", "*");
-        configurarMocksParaFluxoCompleto();
-        var payload = payloadComTecnico("qualquer-tecnico");
+        configurarMocksFluxoCompleto();
 
-        integrationService.processGlpiWebhook(payload);
+        integrationService.processGlpiWebhook(payloadSemCategoria());
 
         verify(glpiIntegrationService, times(1)).initSession();
     }
 
     @Test
-    void processaGlpi_tecnicoDiferente_ignoraTicket() {
+    void processaGlpi_tecnicoCorrespondePelaApi_processa() {
         ReflectionTestUtils.setField(integrationService, "assigneeThatSendToTaiga", "tecnico1");
-        var payload = payloadComTecnico("tecnico2");
+        when(glpiIntegrationService.initSession()).thenReturn("session");
+        when(glpiIntegrationService.isUserAssignedToTicket(any(), eq("tecnico1"), any())).thenReturn(true);
+        configurarMocksFluxoCompleto();
 
-        integrationService.processGlpiWebhook(payload);
+        integrationService.processGlpiWebhook(payloadSemCategoria());
 
-        verifyNoInteractions(glpiIntegrationService);
+        verify(taigaIntegrationService, times(1)).createIssueOnTaiga(any(), any(), any(), any());
     }
 
     @Test
-    void processaGlpi_membroSemRoleAssigned_ignoraTicket() {
+    void processaGlpi_tecnicoNaoAtribuidoPelaApi_ignoraTicket() {
         ReflectionTestUtils.setField(integrationService, "assigneeThatSendToTaiga", "tecnico1");
-        var membro = new GlpiTeamMember("observer", "tecnico1", null, null, null);
-        var item = new GlpiItem(1L, "Ticket", "Conteúdo", null, null, List.of(membro));
-        var payload = new GlpiWebhookPayload("add", item);
+        when(glpiIntegrationService.initSession()).thenReturn("session");
+        when(glpiIntegrationService.isUserAssignedToTicket(any(), eq("tecnico1"), any())).thenReturn(false);
 
-        integrationService.processGlpiWebhook(payload);
+        integrationService.processGlpiWebhook(payloadSemCategoria());
 
-        verifyNoInteractions(glpiIntegrationService);
+        verify(taigaIntegrationService, never()).createIssueOnTaiga(any(), any(), any(), any());
     }
 
+    // -------------------------------------------------------------------------
+    // Idempotência
+    // -------------------------------------------------------------------------
+
     @Test
-    void processaGlpi_ticketJaPossuiIssueTaiga_naoReprocessa() {
+    void processaGlpi_ticketJaIntegrado_naoReprocessa() {
         ReflectionTestUtils.setField(integrationService, "categoryThatSendToTaiga", "*");
         var recordExistente = new GlpiPluginFieldsRecord(1L, 10L, "123", "http://taiga/issue/1");
         when(glpiIntegrationService.initSession()).thenReturn("session");
         when(glpiIntegrationService.getPluginFieldsRecord(any(), any()))
                 .thenReturn(Optional.of(recordExistente));
-        var payload = payloadComCategoria("Qualquer");
 
-        integrationService.processGlpiWebhook(payload);
+        integrationService.processGlpiWebhook(payloadComCategoria("Qualquer"));
 
         verify(taigaIntegrationService, never()).authenticateInTaiga();
         verify(taigaIntegrationService, never()).createIssueOnTaiga(any(), any(), any(), any());
     }
 
     @Test
-    void processaGlpi_recordComIdTaigaZero_reprocessa() {
+    void processaGlpi_recordComIdZero_reprocessa() {
         ReflectionTestUtils.setField(integrationService, "categoryThatSendToTaiga", "*");
         var recordComIdZero = new GlpiPluginFieldsRecord(1L, 10L, "0", null);
         when(glpiIntegrationService.initSession()).thenReturn("session");
@@ -197,19 +177,20 @@ class IntegrationServiceTest {
         when(taigaIntegrationService.buildTaigaIssueUrl(any(), any())).thenReturn("http://taiga/issue/5");
         when(glpiIntegrationService.getInitialStatusExternalProgress()).thenReturn("New");
 
-        var payload = payloadComCategoria("Qualquer");
-        integrationService.processGlpiWebhook(payload);
+        integrationService.processGlpiWebhook(payloadComCategoria("Qualquer"));
 
         verify(taigaIntegrationService, times(1)).createIssueOnTaiga(any(), any(), any(), any());
     }
 
+    // -------------------------------------------------------------------------
+    // Resiliência de autenticação
+    // -------------------------------------------------------------------------
+
     @Test
     void processaGlpi_authException_retentaUmaVez() {
         ReflectionTestUtils.setField(integrationService, "categoryThatSendToTaiga", "*");
-
-        // Primeira chamada lança exceção; segunda retorna token válido
         when(glpiIntegrationService.initSession())
-                .thenThrow(new IntegrationAuthenticationException("401 Unauthorized"))
+                .thenThrow(new IntegrationAuthenticationException("401"))
                 .thenReturn("session-novo");
         when(glpiIntegrationService.getPluginFieldsRecord(any(), any())).thenReturn(Optional.empty());
         when(taigaIntegrationService.authenticateInTaiga()).thenReturn("taiga-token");
@@ -223,16 +204,19 @@ class IntegrationServiceTest {
 
         integrationService.processGlpiWebhook(payloadComCategoria("Qualquer"));
 
-        // initSession chamado duas vezes: falha na 1ª tentativa, sucesso na 2ª
         verify(glpiIntegrationService, times(2)).initSession();
         verify(taigaIntegrationService, times(1)).createIssueOnTaiga(any(), any(), any(), any());
     }
 
+    // -------------------------------------------------------------------------
+    // Webhook Taiga
+    // -------------------------------------------------------------------------
+
     @Test
     void processaTaiga_acaoCreate_ignorada() {
-        var payload = new TaigaWebhookPayload(
-                "create", "issue",
-                new TaigaIssueData(1L, 1L, "Issue", "Desc", new TaigaStatusData(1L, "New"), null, null, null), null);
+        var payload = new TaigaWebhookPayload("create", "issue",
+                new TaigaIssueData(1L, 1L, "Issue", "Desc",
+                        new TaigaStatusData(1L, "New"), null, null, null), null);
 
         integrationService.processTaigaWebhook(payload);
 
@@ -240,10 +224,10 @@ class IntegrationServiceTest {
     }
 
     @Test
-    void processaTaiga_tipoNaoIssue_ignorado() {
-        var payload = new TaigaWebhookPayload(
-                "change", "userstory",
-                new TaigaIssueData(1L, 1L, "US", "Desc", new TaigaStatusData(1L, "In Progress"), null, null, null), null);
+    void processaTaiga_historiaSemIssueDeOrigem_ignorada() {
+        var payload = new TaigaWebhookPayload("change", "userstory",
+                new TaigaIssueData(1L, 1L, "US", "Desc",
+                        new TaigaStatusData(1L, "In Progress"), null, null, null), null);
 
         integrationService.processTaigaWebhook(payload);
 
@@ -254,29 +238,31 @@ class IntegrationServiceTest {
     void processaTaiga_ticketGlpiNaoEncontrado_naoAtualiza() {
         when(glpiIntegrationService.initSession()).thenReturn("session");
         when(glpiIntegrationService.getTicketByIdTaiga(any(), any())).thenReturn(Optional.empty());
-
-        var payload = new TaigaWebhookPayload(
-                "change", "issue",
-                new TaigaIssueData(99L, 5L, "Issue", "Desc", new TaigaStatusData(2L, "In Progress"), null, null, null), null);
+        var payload = new TaigaWebhookPayload("change", "issue",
+                new TaigaIssueData(99L, 5L, "Issue", "Desc",
+                        new TaigaStatusData(2L, "In Progress"), null, null, null), null);
 
         integrationService.processTaigaWebhook(payload);
 
         verify(glpiIntegrationService, never()).syncExternalProgress(any(), any(), any(), any());
     }
 
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
     private GlpiWebhookPayload payloadComCategoria(String nomeCategoria) {
-        var item = new GlpiItem(1L, "Ticket Teste", "Conteúdo do ticket",
+        var item = new GlpiItem(1L, "Ticket Teste", "Conteúdo",
                 new GlpiCategory(10L, nomeCategoria), null, List.of());
         return new GlpiWebhookPayload("add", item);
     }
 
-    private GlpiWebhookPayload payloadComTecnico(String login) {
-        var membro = new GlpiTeamMember("assigned", login, null, null, null);
-        var item = new GlpiItem(1L, "Ticket Teste", "Conteúdo", null, null, List.of(membro));
+    private GlpiWebhookPayload payloadSemCategoria() {
+        var item = new GlpiItem(1L, "Ticket Teste", "Conteúdo", null, null, List.of());
         return new GlpiWebhookPayload("add", item);
     }
 
-    private void configurarMocksParaFluxoCompleto() {
+    private void configurarMocksFluxoCompleto() {
         when(glpiIntegrationService.initSession()).thenReturn("session-token");
         when(glpiIntegrationService.getPluginFieldsRecord(any(), any())).thenReturn(Optional.empty());
         when(taigaIntegrationService.authenticateInTaiga()).thenReturn("taiga-token");
