@@ -1,59 +1,43 @@
+#  Defaults embutidos (não edite para deploys)
+#  Para customizar, edite config/application.yaml no host
+
 server:
   port: 8081
 
 taiga:
   api:
-    url: ${TAIGA_URL:http://localhost:9000/api/v1}
-    username: ${TAIGA_USERNAME:taiga}
-    password: ${TAIGA_PASSWORD:taiga}
+    url: ${TAIGA_URL}
+    username: ${TAIGA_USERNAME}
+    password: ${TAIGA_PASSWORD}
   web:
-    url: ${TAIGA_WEB_URL:http://localhost:9000}
+    url: ${TAIGA_WEB_URL}
   routing:
     fallback-project-name: Diversos
-    entity-mappings:
-      - glpi-entity-name: Projeto 1
-        taiga-project-name: Primeiro Serviço
-      - glpi-entity-name: Diversos
-        taiga-project-name: Diversos
+    entity-mappings: []
 
 glpi:
   api:
-    url: ${GLPI_URL:http://localhost:8080/apirest.php}
-    app-token: ${GLPI_APP_TOKEN:app_token}
-    user-token: ${GLPI_USER_TOKEN:user_token}
-    category-that-send-to-taiga: Desenvolvimento
-    assignee-that-send-to-taiga: tech
+    url: ${GLPI_URL}
+    app-token: ${GLPI_APP_TOKEN}
+    user-token: ${GLPI_USER_TOKEN}
+    category-that-send-to-taiga:
+    assignee-that-send-to-taiga:
+
   plugin-fields:
     private-ticket-status-block-name: Informações do Taiga
     public-ticket-status-block-name: Progresso do chamado
-    private-fields:
-      id-taiga: ID da Issue
-      link-taiga: Link da Issue
-    public-fields:
-      status-chamado: Status do chamado
-      data-prevista: Conclusão prevista
     status-inicial: Novo
-  status-map:
-    - taiga: New
-      glpi: Novo
-    - taiga: In progress
-      glpi: Em andamento
-    - taiga: Ready for test
-      glpi: Pronto para teste
-    - taiga: Done
-      glpi: Concluído
-    - taiga: Archived
-      glpi: Arquivado
-    - taiga: Closed
-      glpi: Fechado
-    - taiga: Needs info
-      glpi: Aguardando informação
-    - taiga: Rejected
-      glpi: Rejeitado
-    - taiga: Postponed
-      glpi: Adiado
-    - taiga: Ready
-      glpi: Preparado
+    private-fields:
+      id-taiga: ID Taiga
+      link-taiga: Link Taiga
+    public-fields:
+      status-chamado: Status do Chamado
+      data-prevista: Data prevista
+
+  # status-map intencionalmente vazio — defaults estão em StatusTranslator.java.
+  # Declare entradas aqui SOMENTE para sobrescrever ou adicionar status customizados.
+  status-map: []
+
   entities:
     root-name: Entidade raiz
 
@@ -67,25 +51,24 @@ security:
 ssl:
   skip-verify: ${SSL_SKIP_VERIFY:false}
 
+integration:
+  auth:
+    max-retries: 1
+  async:
+    core-pool-size: 2
+    max-pool-size: 5
+    queue-capacity: 100
+    shutdown-timeout: 30
+
 logging:
   level:
-    com:
-      chris:
-        glpi_taiga_integration: INFO
-
-  # Log em arquivo desativado por padrão em desenvolvimento.
-  # Para ativar, defina a variável de ambiente LOG_FILE com o caminho desejado.
-  # Exemplo: LOG_FILE=./logs/app.log
+    com.chris.glpi_taiga_integration: INFO
   file:
     name: ${LOG_FILE:}
-
-  # Rotação automática
-  # só tem efeito quando LOG_FILE está definido
   logback:
     rollingpolicy:
       max-file-size: 10MB
-      max-history: 30 # dias de retenção
+      max-history: 30
       total-size-cap: 200MB
-
   integration:
     failure-file: integration_failures.log
