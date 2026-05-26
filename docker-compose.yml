@@ -1,8 +1,8 @@
 services:
   middleware:
     build: .
-    image: chamataiga:latest
-    container_name: chamataiga
+    image: desk2agile:latest
+    container_name: desk2agile
     restart: unless-stopped
     ports:
       - "8081:8081"

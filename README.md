@@ -1,4 +1,4 @@
-# ChamaTaiga
+# Desk2Agile
 
 Middleware em `Spring Boot` para integrar `GLPI` e `Taiga` via webhooks.
 
@@ -176,7 +176,7 @@ Para incluir os testes no build:
 ### Build da imagem Docker
 
 ```bash
-docker build -t chamataiga:latest .
+docker build -t desk2agile:latest .
 ```
 
 A imagem usa build multi-stage: compila o JAR em uma imagem JDK e o executa em uma imagem JRE menor (`eclipse-temurin:21-jre-alpine`).
@@ -197,13 +197,13 @@ Certifique-se de ter o `.env` preenchido e a imagem construída, depois:
 
 ```bash
 docker run -d \
-  --name chamataiga \
+  --name desk2agile \
   --restart unless-stopped \
   -p 8081:8081 \
   --env-file .env \
   -v "$(pwd)/config/application.yaml:/app/config/application.yaml:ro" \
   -v "$(pwd)/certs:/app/certs:ro" \
-  chamataiga:latest
+  desk2agile:latest
 ```
 
 ### Via Docker Compose (recomendado para produção)
@@ -235,10 +235,10 @@ Todos os logs vão para stdout/stderr, conforme o padrão de containers:
 
 ```bash
 # Acompanhar em tempo real
-docker logs chamataiga -f
+docker logs desk2agile -f
 
 # Últimas 100 linhas
-docker logs chamataiga --tail 100
+docker logs desk2agile --tail 100
 ```
 
 ## Certificados SSL customizados
