@@ -2,6 +2,7 @@ package com.chris.glpi_taiga_integration.config;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import lombok.Getter;
 import org.slf4j.Logger;
@@ -10,13 +11,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * Traduz nomes de status vindos do Taiga para um valor personalizado
- * usando um dicionário definido em {@code glpi.status-map} no application.yaml.
- * Isso serve para poder colocar um texto mais compreensível já que o valor
- * bruto que o Taiga envia está em inglês.
- * Ex.: New - Novo, In progress - Em progresso.
- *
- * <p>Fallback: se o status recebido não estiver mapeado, o valor original vindo do Taiga é usado.
+ * Traduz status do Taiga (inglês) para o texto que será exibido no GLPI.
+ * Para sobrescrever ou adicionar entradas, configure {@code glpi.status-map} no application.yaml.
+ * Entradas no yaml têm precedência sobre os defaults.
  */
 @Getter
 @Component
@@ -24,20 +21,42 @@ import org.springframework.stereotype.Component;
 public class StatusTranslator {
 
     private static final Logger log = LoggerFactory.getLogger(StatusTranslator.class);
+    private static final Map<String, String> DEFAULTS = Map.of(
+            "new",              "Novo",
+            "in progress",      "Em andamento",
+            "ready for test",   "Pronto para teste",
+            "done",             "Concluído",
+            "archived",         "Arquivado",
+            "closed",           "Fechado",
+            "needs info",       "Aguardando informação",
+            "rejected",         "Rejeitado",
+            "postponed",        "Adiado",
+            "ready",            "Preparado"
+    );
 
+    /**
+     * Sobrescritas via {@code glpi.status-map} no yaml.
+     * Só precisam ser declaradas se o usuário quiser mudar um default ou
+     * adicionar status customizados do Taiga.
+     */
     private final List<StatusMapEntry> statusMap = new ArrayList<>();
-
     public String translate(String taigaStatus) {
         if (taigaStatus == null || taigaStatus.isBlank()) return taigaStatus;
 
-        return statusMap.stream()
+        // yaml overrides têm precedência
+        String fromYaml = statusMap.stream()
                 .filter(e -> e.getTaiga().equalsIgnoreCase(taigaStatus))
                 .map(StatusMapEntry::getGlpi)
                 .findFirst()
-                .orElseGet(() -> {
-                    log.warn("STATUS MAP - Status '{}' não mapeado em glpi.status-map. "
-                            + "Gravando o valor original.", taigaStatus);
-                    return taigaStatus;
-                });
+                .orElse(null);
+
+        if (fromYaml != null) return fromYaml;
+
+        // Fallback para defaults embutidos
+        String fromDefault = DEFAULTS.get(taigaStatus.toLowerCase());
+        if (fromDefault != null) return fromDefault;
+
+        log.warn("STATUS MAP - Status '{}' não mapeado. Gravando o valor original.", taigaStatus);
+        return taigaStatus;
     }
 }

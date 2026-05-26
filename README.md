@@ -134,28 +134,28 @@ GLPI_URL=http://localhost:8080/apirest.php
 GLPI_APP_TOKEN=app_token
 GLPI_USER_TOKEN=user_token
 
-# Segurança dos webhooks
+# Segurança dos webhooks — obrigatório em produção
 WEBHOOK_GLPI_TOKEN=TOKEN-GLPI
 WEBHOOK_TAIGA_SECRET=chave-secreta
 ```
 
 ## Configuração principal (`config/application.yaml`)
 
-Edite `config/application.yaml` na raiz do projeto (este arquivo sobrescreve o YAML embutido no JAR em produção). Ajuste principalmente:
+Edite `config/application.yaml` na raiz do projeto. Este arquivo sobrescreve os defaults embutidos no JAR.
+
+Ajuste principalmente:
 
 - `glpi.api.category-that-send-to-taiga`: categoria que dispara criação de issue (`*` = qualquer; vazio = desligado).
 - `glpi.api.assignee-that-send-to-taiga`: login do técnico que dispara criação de issue (`*` = qualquer; vazio = desligado).
 - `taiga.routing.entity-mappings`: mapeamento de entidade GLPI → projeto Taiga.
 - `taiga.routing.fallback-project-name`: projeto usado quando não houver mapeamento.
-- `glpi.plugin-fields.private-ticket-status-block-name`: nome exato do bloco privado no GLPI (padrão: `Informações do Taiga`).
-- `glpi.plugin-fields.public-ticket-status-block-name`: nome exato do bloco público no GLPI (padrão: `Progresso do chamado`).
-- `glpi.plugin-fields.private-fields.*`: nomes exatos dos campos do bloco privado.
-- `glpi.plugin-fields.public-fields.*`: nomes exatos dos campos do bloco público.
-- `glpi.plugin-fields.status-inicial`: status gravado no bloco público ao criar a issue.
-- `glpi.status-map`: lista de traduções de status do Taiga para português. Cada entrada tem `taiga` (valor exato enviado pelo Taiga) e `glpi` (texto gravado no GLPI). Se um status recebido não estiver na lista, o valor original do Taiga é gravado e um aviso é registrado no log.
-- `security.webhook.glpi-token`: token Bearer esperado do GLPI (via `WEBHOOK_GLPI_TOKEN`).
-- `security.webhook.taiga-secret`: secret key do Taiga para validação HMAC-SHA1 (via `WEBHOOK_TAIGA_SECRET`).
-- `security.webhook.allowed-ips`: IPs autorizados a chamar os webhooks.
+- `glpi.plugin-fields.private-ticket-status-block-name`: nome exato do bloco privado no GLPI.
+- `glpi.plugin-fields.public-ticket-status-block-name`: nome exato do bloco público no GLPI.
+- `glpi.entities.root-name`: nome da entidade raiz no GLPI (chamados dessa entidade vão para o fallback).
+
+Os nomes dos campos do Plugin Fields (`glpi.plugin-fields.private-fields.*` e `glpi.plugin-fields.public-fields.*`) têm defaults configurados. Só declare esses campos se usar nomes diferentes dos padrões — veja a seção de campos no `config/application.yaml`.
+
+O mapeamento de status (`glpi.status-map`) é **opcional**. Os 10 status padrão do Taiga já vêm traduzidos para português. Declare entradas nessa chave apenas para sobrescrever uma tradução ou adicionar um status customizado do Taiga.
 
 ## Build
 
@@ -202,7 +202,6 @@ docker run -d \
   -p 8081:8081 \
   --env-file .env \
   -v "$(pwd)/config/application.yaml:/app/config/application.yaml:ro" \
-  -v glpi-taiga-logs:/app/logs \
   -v "$(pwd)/certs:/app/certs:ro" \
   chamataiga:latest
 ```
@@ -213,7 +212,7 @@ docker run -d \
 # Subir em background
 docker compose up -d
 
-# Verificar logs em tempo real
+# Acompanhar logs em tempo real
 docker compose logs -f middleware
 
 # Parar
@@ -222,27 +221,24 @@ docker compose down
 
 O `docker-compose.yml` já monta:
 - `./config/application.yaml` → sobrescreve o YAML embutido no JAR
-- `logs` (named volume) → persiste os logs; Docker gerencia permissões automaticamente, sem setup no host
 - `./certs` → certificados customizados importados automaticamente no truststore da JVM
-
-Para acompanhar os logs em tempo real:
-
-```bash
-docker exec chamataiga tail -f /app/logs/app.log
-```
 
 ### Rebuild e restart (após mudanças de código)
 
 ```bash
-docker compose down
-docker build -t chamataiga:latest .
-docker compose up -d
+docker compose up -d --build
 ```
 
-Ou em um único comando:
+## Logs
+
+Todos os logs vão para stdout/stderr, conforme o padrão de containers:
 
 ```bash
-docker compose up -d --build
+# Acompanhar em tempo real
+docker logs chamataiga -f
+
+# Últimas 100 linhas
+docker logs chamataiga --tail 100
 ```
 
 ## Certificados SSL customizados

@@ -1,26 +1,28 @@
 package com.chris.glpi_taiga_integration.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.chris.glpi_taiga_integration.config.IpAllowlistFilter;
 import com.chris.glpi_taiga_integration.config.WebhookSecurityProperties;
-import com.chris.glpi_taiga_integration.exception.GlpiPluginFieldsException;
-import com.chris.glpi_taiga_integration.service.FailureLogService;
 import com.chris.glpi_taiga_integration.service.IntegrationService;
+import java.util.concurrent.RejectedExecutionException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(
@@ -33,17 +35,28 @@ class WebhookControllerTest {
     @Autowired
     private MockMvc mvc;
 
-    @MockBean
+    @MockitoBean
     private IntegrationService integrationService;
 
-    // FIX: beans não-web não são carregados pelo @WebMvcTest — precisam de @MockBean
-    @MockBean
-    private FailureLogService failureLogService;
-
-    @MockBean
+    @MockitoBean
     private WebhookSecurityProperties webhookSecurityProperties;
 
-    // POST /api/webhook/glpi
+    @MockitoBean(name = "webhookExecutor")
+    private ThreadPoolTaskExecutor webhookExecutor;
+
+    @BeforeEach
+    void setUp() {
+        // Autenticação desligada por padrão; testes de auth configuram explicitamente
+        when(webhookSecurityProperties.getGlpiToken()).thenReturn("");
+        when(webhookSecurityProperties.getTaigaSecret()).thenReturn("");
+
+        // Executor roda a task na própria thread de teste (comportamento síncrono)
+        doAnswer(inv -> { ((Runnable) inv.getArgument(0)).run(); return null; })
+                .when(webhookExecutor).execute(any(Runnable.class));
+    }
+
+    // POST /api/webhook/glpi — validação de payload
+
     @Test
     void glpi_payloadSemItem_retorna400() throws Exception {
         mvc.perform(post("/api/webhook/glpi")
@@ -56,15 +69,7 @@ class WebhookControllerTest {
     }
 
     @Test
-    void glpi_payloadVazio_retorna400() throws Exception {
-        mvc.perform(post("/api/webhook/glpi")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void glpi_payloadValido_retorna200() throws Exception {
+    void glpi_payloadValido_retorna202() throws Exception {
         doNothing().when(integrationService).processGlpiWebhook(any());
 
         mvc.perform(post("/api/webhook/glpi")
@@ -75,44 +80,10 @@ class WebhookControllerTest {
                           "item": {"id": 1, "name": "Ticket Teste", "content": "Descrição"}
                         }
                         """))
-                .andExpect(status().isOk())
-                .andExpect(content().string("Webhook GLPI processado com sucesso."));
+                .andExpect(status().isAccepted())
+                .andExpect(content().string("Webhook GLPI recebido."));
 
         verify(integrationService).processGlpiWebhook(any());
-    }
-
-    @Test
-    void glpi_erroPluginFields_retorna400() throws Exception {
-        doThrow(new GlpiPluginFieldsException("Bloco não encontrado", null))
-                .when(integrationService).processGlpiWebhook(any());
-
-        mvc.perform(post("/api/webhook/glpi")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                        {
-                          "event": "add",
-                          "item": {"id": 1, "name": "Ticket", "content": "Desc"}
-                        }
-                        """))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("Bloco não encontrado")));
-    }
-
-    @Test
-    void glpi_erroInesperado_retorna500() throws Exception {
-        doThrow(new RuntimeException("Conexão recusada"))
-                .when(integrationService).processGlpiWebhook(any());
-
-        mvc.perform(post("/api/webhook/glpi")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                        {
-                          "event": "add",
-                          "item": {"id": 1, "name": "Ticket", "content": "Desc"}
-                        }
-                        """))
-                .andExpect(status().isInternalServerError())
-                .andExpect(content().string("Erro interno ao processar webhook GLPI."));
     }
 
     @Test
@@ -127,10 +98,83 @@ class WebhookControllerTest {
                           "item": {"id": 1, "name": "Ticket", "content": "Desc"}
                         }
                         """))
-                .andExpect(status().isOk());
+                .andExpect(status().isAccepted());
     }
 
-    // POST /api/webhook/taiga
+    // POST /api/webhook/glpi — autenticação
+
+    @Test
+    void glpi_semToken_configurado_retorna401() throws Exception {
+        when(webhookSecurityProperties.getGlpiToken()).thenReturn("secret-token");
+
+        mvc.perform(post("/api/webhook/glpi")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                          "event": "add",
+                          "item": {"id": 1, "name": "Ticket", "content": "Desc"}
+                        }
+                        """))
+                .andExpect(status().isUnauthorized());
+
+        verify(integrationService, never()).processGlpiWebhook(any());
+    }
+
+    @Test
+    void glpi_tokenErrado_retorna401() throws Exception {
+        when(webhookSecurityProperties.getGlpiToken()).thenReturn("secret-token");
+
+        mvc.perform(post("/api/webhook/glpi")
+                        .header("Authorization", "Bearer token-errado")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                          "event": "add",
+                          "item": {"id": 1, "name": "Ticket", "content": "Desc"}
+                        }
+                        """))
+                .andExpect(status().isUnauthorized());
+
+        verify(integrationService, never()).processGlpiWebhook(any());
+    }
+
+    @Test
+    void glpi_tokenCorreto_retorna202() throws Exception {
+        when(webhookSecurityProperties.getGlpiToken()).thenReturn("secret-token");
+        doNothing().when(integrationService).processGlpiWebhook(any());
+
+        mvc.perform(post("/api/webhook/glpi")
+                        .header("Authorization", "Bearer secret-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                          "event": "add",
+                          "item": {"id": 1, "name": "Ticket", "content": "Desc"}
+                        }
+                        """))
+                .andExpect(status().isAccepted());
+    }
+
+    // POST /api/webhook/glpi — fila cheia
+
+    @Test
+    void glpi_filaCheia_retorna503() throws Exception {
+        doAnswer(inv -> { throw new java.util.concurrent.RejectedExecutionException(); })
+                .when(webhookExecutor).execute(any(Runnable.class));
+
+        mvc.perform(post("/api/webhook/glpi")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                          "event": "add",
+                          "item": {"id": 1, "name": "Ticket", "content": "Desc"}
+                        }
+                        """))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    // POST /api/webhook/taiga — validação de payload
+
     @Test
     void taiga_payloadSemData_retorna400() throws Exception {
         mvc.perform(post("/api/webhook/taiga")
@@ -142,7 +186,6 @@ class WebhookControllerTest {
                 .andExpect(content().string("Payload inválido: data ausente."));
     }
 
-    // FIX: o controller aceita "issue" e "userstory" — usar tipo realmente ignorado (ex: "epic")
     @Test
     void taiga_tipoNaoTratado_retorna200ComMensagemIgnorado() throws Exception {
         mvc.perform(post("/api/webhook/taiga")
@@ -161,7 +204,7 @@ class WebhookControllerTest {
     }
 
     @Test
-    void taiga_payloadValido_retorna200() throws Exception {
+    void taiga_payloadValido_retorna202() throws Exception {
         doNothing().when(integrationService).processTaigaWebhook(any());
 
         mvc.perform(post("/api/webhook/taiga")
@@ -173,16 +216,16 @@ class WebhookControllerTest {
                           "data": {"id": 1, "ref": 1, "status": {"id": 2, "name": "In Progress"}}
                         }
                         """))
-                .andExpect(status().isOk())
-                .andExpect(content().string("Webhook Taiga processado com sucesso."));
+                .andExpect(status().isAccepted())
+                .andExpect(content().string("Webhook Taiga recebido."));
 
         verify(integrationService).processTaigaWebhook(any());
     }
 
     @Test
-    void taiga_erroPluginFields_retorna400() throws Exception {
-        doThrow(new GlpiPluginFieldsException("Campo ausente", null))
-                .when(integrationService).processTaigaWebhook(any());
+    void taiga_filaCheia_retorna503() throws Exception {
+        doAnswer(inv -> { throw new RejectedExecutionException(); })
+                .when(webhookExecutor).execute(any(Runnable.class));
 
         mvc.perform(post("/api/webhook/taiga")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -193,25 +236,6 @@ class WebhookControllerTest {
                           "data": {"id": 1, "ref": 1, "status": {"id": 2, "name": "Done"}}
                         }
                         """))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("Campo ausente")));
-    }
-
-    @Test
-    void taiga_erroInesperado_retorna500() throws Exception {
-        doThrow(new RuntimeException("Timeout"))
-                .when(integrationService).processTaigaWebhook(any());
-
-        mvc.perform(post("/api/webhook/taiga")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                        {
-                          "action": "change",
-                          "type": "issue",
-                          "data": {"id": 1, "ref": 1, "status": {"id": 2, "name": "Done"}}
-                        }
-                        """))
-                .andExpect(status().isInternalServerError())
-                .andExpect(content().string("Erro interno ao processar webhook Taiga."));
+                .andExpect(status().isServiceUnavailable());
     }
 }

@@ -36,18 +36,15 @@ public class WebhookController {
     private static final String HMAC_ALGO = "HmacSHA1";
 
     private final IntegrationService integrationService;
-    private final com.chris.glpi_taiga_integration.service.FailureLogService failureLogService;
     private final WebhookSecurityProperties securityProperties;
     private final ObjectMapper objectMapper;
     private final ThreadPoolTaskExecutor webhookExecutor;
 
     public WebhookController(IntegrationService integrationService,
-                             com.chris.glpi_taiga_integration.service.FailureLogService failureLogService,
                              WebhookSecurityProperties securityProperties,
                              ObjectMapper objectMapper,
                              @Qualifier("webhookExecutor") ThreadPoolTaskExecutor webhookExecutor) {
         this.integrationService = integrationService;
-        this.failureLogService = failureLogService;
         this.securityProperties = securityProperties;
         this.objectMapper = objectMapper;
         this.webhookExecutor = webhookExecutor;
@@ -80,11 +77,9 @@ public class WebhookController {
                 try {
                     integrationService.processGlpiWebhook(payload);
                 } catch (GlpiPluginFieldsException e) {
-                    log.error("ROTA /glpi - Erro no Plugin Fields: {}", e.getMessage());
-                    failureLogService.logFailure("Webhook GLPI (Plugin Fields)", e);
+                    log.error("ROTA /glpi - Erro no Plugin Fields", e);
                 } catch (Exception e) {
                     log.error("ROTA /glpi - Erro ao processar webhook", e);
-                    failureLogService.logFailure("Webhook GLPI", e);
                 }
             });
         } catch (RejectedExecutionException e) {
@@ -142,11 +137,9 @@ public class WebhookController {
                 try {
                     integrationService.processTaigaWebhook(payload);
                 } catch (GlpiPluginFieldsException e) {
-                    log.error("ROTA /taiga - Erro no Plugin Fields: {}", e.getMessage());
-                    failureLogService.logFailure("Webhook Taiga (Plugin Fields)", e);
+                    log.error("ROTA /taiga - Erro no Plugin Fields", e);
                 } catch (Exception e) {
                     log.error("ROTA /taiga - Erro ao processar webhook", e);
-                    failureLogService.logFailure("Webhook Taiga", e);
                 }
             });
         } catch (RejectedExecutionException e) {

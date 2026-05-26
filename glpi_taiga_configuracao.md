@@ -126,7 +126,7 @@ Configurar > Campos adicionais > Adicionar
 | Ativo | Sim |
 | Tipo de item associado | Assistência - Chamados |
 
-> O rótulo que for colocado aqui deve ser colocado em `glpi.plugin-fields.public-ticket-status-block-name` no `application.yaml`.
+> O rótulo que for colocado aqui deve ser colocado em `glpi.plugin-fields.public-ticket-status-block-name` no `config/application.yaml`.
 
 ### Permissões
 
@@ -180,7 +180,7 @@ Este bloco armazena os dados internos da integração com o Taiga e é visível 
 | Ativo | Sim |
 | Tipo de item associado | Assistência - Chamados |
 
-> O rótulo deve ser exatamente `Informações do Taiga` para corresponder ao valor padrão de `glpi.plugin-fields.private-ticket-status-block-name` no `application.yaml`.
+> O rótulo deve corresponder ao valor de `glpi.plugin-fields.private-ticket-status-block-name` no `config/application.yaml`.
 
 ### Permissões
 
@@ -228,7 +228,7 @@ Este bloco armazena os dados internos da integração com o Taiga e é visível 
 | Informações do Taiga | Equipe | ID da Issue | Número | `iddaissuefield` |
 | Informações do Taiga | Equipe | Link da Issue | URL | `linkdaissuefield` |
 
-> Os nomes na API são gerados automaticamente pelo middleware a partir dos rótulos configurados no `application.yaml`: remove acentos, espaços e caracteres especiais, converte para minúsculas e adiciona o sufixo `field`. Se você usar rótulos diferentes dos padrões acima, atualize `glpi.plugin-fields.*` no `application.yaml` de acordo.
+> Os nomes na API são gerados automaticamente pelo middleware a partir dos rótulos configurados no `config/application.yaml`: remove acentos, espaços e caracteres especiais, converte para minúsculas e adiciona o sufixo `field`. Se você usar rótulos diferentes dos padrões acima, atualize `glpi.plugin-fields.*` no `config/application.yaml` de acordo.
 
 ---
 
@@ -293,11 +293,11 @@ O GLPI suporta o envio de **cabeçalhos HTTP personalizados** em cada requisiç�
 
 ## Como adicionar cabeçalhos personalizados no GLPI
 
-Ao criar ou editar um webhook, role a página até a seção **"Cabeçalhos HTTP personalizados"** (ou *Custom HTTP headers*, dependendo do idioma da instalação). Essa seção fica abaixo dos campos principais do formulário.
+Ao criar ou editar um webhook, role a página até a seção **"Cabeçalhos HTTP personalizados"**. Essa seção fica abaixo dos campos principais do formulário.
 
 ### Passos
 
-1. Na seção de cabeçalhos personalizados, clique em **"Adicionar cabeçalho"** (o botão pode aparecer como `+` ou `Adicionar item`).
+1. Clique em **"Adicionar cabeçalho"**.
 2. No campo **Nome do cabeçalho**, digite:
    ```
    Authorization
@@ -306,7 +306,7 @@ Ao criar ou editar um webhook, role a página até a seção **"Cabeçalhos HTTP
    ```
    Bearer TOKEN-GLPI
    ```
-   Substitua `TOKEN-GLPI` pelo valor definido em `WEBHOOK_GLPI_TOKEN` no `.env` do middleware. O token pode ser qualquer string segura — use um gerador de tokens aleatórios para produção.
+   Substitua `TOKEN-GLPI` pelo valor definido em `WEBHOOK_GLPI_TOKEN` no `.env` do middleware.
 4. Salve o webhook.
 
 > **Atenção:** o valor do campo deve incluir a palavra `Bearer` seguida de um espaço e depois o token. Exemplo completo: `Bearer meu-token-secreto-aqui`. O middleware espera exatamente esse formato.
@@ -491,39 +491,38 @@ O middleware busca a entidade do chamado no GLPI, localiza o mapeamento correspo
 
 # Mapeamento de status do Taiga
 
-Por padrão, o Taiga envia os nomes de status em inglês (ex.: `In progress`, `Done`). O middleware permite traduzir esses valores para qualquer texto antes de gravá-los no campo **Status do chamado** do GLPI.
+Por padrão, o middleware já traduz os 10 status padrão do Taiga para português:
 
-O mapeamento é configurado em `config/application.yaml` sob a chave `glpi.status-map`:
+| Status no Taiga | Gravado no GLPI |
+|---|---|
+| New | Novo |
+| In progress | Em andamento |
+| Ready for test | Pronto para teste |
+| Done | Concluído |
+| Archived | Arquivado |
+| Closed | Fechado |
+| Needs info | Aguardando informação |
+| Rejected | Rejeitado |
+| Postponed | Adiado |
+| Ready | Preparado |
+
+Nenhuma configuração é necessária para esses status.
+
+Para **sobrescrever** uma tradução ou **adicionar um status customizado** do Taiga, declare entradas em `glpi.status-map` no `config/application.yaml`:
 
 ```yaml
 glpi:
+   # Só declare o que diferir dos defaults acima
    status-map:
-      - taiga: New
-        glpi: Novo
       - taiga: In progress
-        glpi: Em andamento
-      - taiga: Ready for test
-        glpi: Pronto para teste
-      - taiga: Done
-        glpi: Concluído
-      - taiga: Archived
-        glpi: Arquivado
-      - taiga: Closed
-        glpi: Fechado
-      - taiga: Needs info
-        glpi: Aguardando informação
-      - taiga: Rejected
-        glpi: Rejeitado
-      - taiga: Postponed
-        glpi: Adiado
-      - taiga: Ready
-        glpi: Preparado
+        glpi: Em desenvolvimento   # sobrescreve o default "Em andamento"
+      - taiga: MeuStatusCustom
+        glpi: Meu texto no GLPI
 ```
 
 - O campo `taiga` deve ser o nome **exato** do status como aparece no Taiga (case-insensitive).
 - O campo `glpi` é o texto que será gravado no campo **Status do chamado** do GLPI.
-- Se um status recebido do Taiga não tiver entrada no mapa, o valor original é gravado sem alteração e um aviso é registrado no log.
-- Adicione ou remova entradas conforme os status configurados nos seus projetos do Taiga.
+- Se um status recebido do Taiga não tiver mapeamento, o valor original é gravado sem alteração e um aviso é registrado no log.
 
 > **Dica:** para descobrir o nome exato de um status customizado, verifique em `Settings > Issues > Issue statuses` no projeto do Taiga ou observe o log do middleware ao receber um webhook com o status desejado.
 
@@ -545,4 +544,3 @@ Referência completa das variáveis do arquivo `.env`:
 | `WEBHOOK_GLPI_TOKEN` | Recomendado | Token Bearer enviado pelo GLPI no header `Authorization` |
 | `WEBHOOK_TAIGA_SECRET` | Recomendado | Secret key configurada nos webhooks do Taiga (HMAC-SHA1) |
 | `SSL_SKIP_VERIFY` | Não | `true` para aceitar certificados autoassinados (padrão: `false`) |
-| `LOG_FILE` | Não | Caminho do arquivo de log (ex: `./logs/app.log`); vazio = sem log em arquivo |
