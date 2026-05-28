@@ -21,7 +21,7 @@ glpi:
     # Categoria que dispara criação de issue no Taiga ("*" = qualquer, vazio = desligado)
     category-that-send-to-taiga: Desenvolvimento
     # Usuário atribuído que dispara criação de issue ("*" = qualquer, vazio = desligado)
-    assignee-that-send-to-taiga: tech
+    assignee-that-send-to-taiga: Usuário
 
   plugin-fields:
     # Nomes dos blocos do plugin Fields. Coloque exatamente como estão no GLPI

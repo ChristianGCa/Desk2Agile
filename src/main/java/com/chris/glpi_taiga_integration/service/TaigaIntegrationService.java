@@ -48,8 +48,6 @@ public class TaigaIntegrationService {
     private String taigaWebUrl;
 
     /**
-     * Construtor para injeção de dependências do Spring.
-     *
      * @param restClient Cliente HTTP para as requisições.
      */
     public TaigaIntegrationService(RestClient restClient) {
@@ -59,9 +57,8 @@ public class TaigaIntegrationService {
     /**
      * Realiza a autenticação na API do Taiga utilizando as credenciais configuradas.
      * O resultado é cacheado para evitar chamadas repetitivas de login.
-     *
      * @return O token de autenticação (JWT) gerado pelo Taiga.
-     * @throws RuntimeException Se a API responder sem um token válido.
+     * @throws RuntimeException se a API responder sem um token válido.
      */
     @Cacheable(value = TAIGA_TOKEN_CACHE, key = CACHE_KEY)
     public String authenticateInTaiga() {
@@ -108,11 +105,9 @@ public class TaigaIntegrationService {
 
     /**
      * Deleta uma Issue do Taiga pelo seu ID.
-     *
-     * <p>Usado como operação de compensação quando a atualização do GLPI falha
+     * Usado como operação de compensação quando a atualização do GLPI falha
      * após a issue já ter sido criada no Taiga. Garante que não fiquem issues
      * órfãs no Taiga sem correspondência no GLPI.
-     *
      * @param issueId ID interno da issue a deletar.
      * @param token   Token de autorização válido.
      */
@@ -128,7 +123,6 @@ public class TaigaIntegrationService {
 
     /**
      * Monta a URL de visualização web para uma determinada Issue.
-     *
      * @param projectSlug Identificador textual do projeto (slug).
      * @param ref Código de referência sequencial da issue.
      * @return URL absoluta da issue ou null se os parâmetros forem inválidos.
@@ -149,7 +143,6 @@ public class TaigaIntegrationService {
 
     /**
      * Recupera os metadados de um projeto a partir do seu slug. O resultado é cacheado.
-     *
      * @param slug O slug identificador do projeto.
      * @param token Token de autorização válido.
      * @return Resposta contendo os dados do projeto.
@@ -166,7 +159,6 @@ public class TaigaIntegrationService {
 
     /**
      * Recupera os metadados de um projeto a partir de seu ID numérico. O resultado é cacheado.
-     *
      * @param projectId ID numérico do projeto.
      * @param token Token de autorização válido.
      * @return Resposta contendo os dados do projeto.
@@ -183,7 +175,6 @@ public class TaigaIntegrationService {
 
     /**
      * Obtém os detalhes completos de uma Issue específica do Taiga.
-     *
      * @param issueId ID interno da issue.
      * @param token Token de autorização válido.
      * @return Objeto com detalhes da issue.
@@ -199,7 +190,6 @@ public class TaigaIntegrationService {
 
     /**
      * Obtém os detalhes completos de uma User Story específica do Taiga.
-     *
      * @param userStoryId ID interno da história de usuário.
      * @param token Token de autorização válido.
      * @return Objeto com detalhes da user story.
@@ -215,7 +205,6 @@ public class TaigaIntegrationService {
 
     /**
      * Traduz o ID de um status de User Story para seu respectivo nome mapeado na plataforma.
-     *
      * @param statusId ID interno do status da história.
      * @param token Token de autorização válido.
      * @return Objeto contendo o nome e propriedades do status.

@@ -56,11 +56,11 @@ public class GlpiIntegrationService {
         this.pluginFieldsProperties = pluginFieldsProperties;
     }
     /**
-     * O GLPI gera o nome do tipo (e o endpoint REST) do plugin Fields a partir do nome do bloco.
-     * Ele remove acentos, espaços e especiais.
+     * O GLPI gera o nome do tipo e o endpoint REST do plugin Fields a partir do nome do bloco.
+     * Ele remove acentos, espaços e caracteres especiais.
      * Exemplos:
-     * "Taiga" → "PluginFieldsTickettaiga"  (endpoint: /PluginFieldsTickettaiga)
-     * "Progresso do chamado" → "PluginFieldsTicketprogressodochamado"
+     * "Taiga" vira "PluginFieldsTickettaiga"  (endpoint: /PluginFieldsTickettaiga)
+     * "Progresso do chamado" vira "PluginFieldsTicketprogressodochamado"
      */
     private String buildItemTypeName(String blockName) {
         String sanitized = blockName
@@ -392,7 +392,6 @@ public class GlpiIntegrationService {
 
     /**
      * Cria registro no bloco "Progresso do chamado".
-     *
      * @param dataPrevista data no formato aceito pelo GLPI (ex.: "2024-12-31"); pode ser null.
      */
     public void createExternalProgress(Long ticketId, String status, String dataPrevista, String sessionToken) {
@@ -405,7 +404,6 @@ public class GlpiIntegrationService {
 
     /**
      * Atualiza registro no bloco "Progresso do chamado".
-     *
      * @param dataPrevista data no formato aceito pelo GLPI (ex.: "2024-12-31"); pode ser null.
      */
     public void updateExternalProgress(Long ticketId, Long recordId, String status, String dataPrevista, String sessionToken) {
@@ -554,7 +552,7 @@ public class GlpiIntegrationService {
 
     /**
      * Resolve o ID interno do usuário GLPI a partir do nome configurado.
-     * O resultado é cacheado — o {@code users_id} de um usuário não muda entre sessões.
+     * O resultado é cacheado - o {@code users_id} de um usuário não muda entre sessões.
      * A busca percorre sequencialmente os campos {@code name} (login), {@code realname}
      * e {@code firstname}, parando no primeiro resultado encontrado.
      *
@@ -603,7 +601,7 @@ public class GlpiIntegrationService {
     /**
      * Verifica se um usuário está atribuído ao ticket com {@code type=2} (Assignee).
      *
-     * <p>Executa no máximo <strong>duas chamadas HTTP</strong>:
+     * <p>Executa no máximo duas chamadas HTTP:
      * <ol>
      *   <li>Resolve o {@code users_id} via {@link #resolveUserIdByName} — usualmente
      *       servido do cache após a primeira execução.</li>

@@ -72,13 +72,11 @@ public class IntegrationService {
      * Processa os payloads recebidos do webhook do GLPI.
      * Filtra tickets elegíveis e aplica concorrência isolada por ID.
      * Chamado pelo controller dentro de uma task do {@code webhookExecutor}.
-     *
-     * <p>O filtro {@link #shouldSendTicketToTaiga} é executado <em>dentro</em> do
+     * O filtro shouldSendTicketToTaiga é executado dentro do
      * {@code withAuthRetry}: se a verificação de técnico atribuído receber um 401
      * (sessão expirada no servidor), o interceptor invalida o cache, lança
-     * {@link com.chris.glpi_taiga_integration.exception.IntegrationAuthenticationException}
+     * com.chris.glpi_taiga_integration.exception.IntegrationAuthenticationException
      * e o retry reabre a sessão antes de tentar novamente.
-     *
      * @param payload Dados enviados pelo gatilho do GLPI.
      */
     public void processGlpiWebhook(GlpiWebhookPayload payload) {
@@ -248,8 +246,6 @@ public class IntegrationService {
                 taigaIntegrationService.buildTaigaIssueUrl(
                         projectSlug,
                         taigaIssue.ref());
-
-        // --- ponto de falha parcial: issue Taiga existe, GLPI ainda não foi atualizado ---
         try {
             glpiIntegrationService.updateGlpiTicket(
                     ticketId,
@@ -264,7 +260,7 @@ public class IntegrationService {
             throw e; // propaga para withAuthRetry decidir se tenta novamente
         }
 
-        // --- sincronização de status: best-effort, não compensa ---
+        // sincronização de status best-effort
         try {
             glpiIntegrationService.syncExternalProgress(
                     ticketId,
@@ -277,7 +273,7 @@ public class IntegrationService {
                             + "Vínculo GLPI↔Taiga gravado, mas status não atualizado. Issue Taiga: {}",
                     ticketId, taigaIssue.id());
             log.warn("GLPI - Sync status inicial falhou para ticket {} (issue Taiga {}). Stack trace:", ticketId, taigaIssue.id(), e);
-            // não re-lança: o vínculo principal já está salvo
+            // não re-lança porque o vínculo principal já está salvo
         }
 
         log.info(
