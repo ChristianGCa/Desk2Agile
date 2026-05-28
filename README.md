@@ -5,7 +5,7 @@ Middleware em `Spring Boot` para integrar `GLPI` e `Taiga` via webhooks.
 ## O que este projeto faz
 
 - Recebe eventos de chamados do GLPI em `POST /api/webhook/glpi`.
-- Cria issue no Taiga quando a categoria do chamado corresponder ao gatilho configurado (`category-that-send-to-taiga`) **ou** quando o técnico responsável corresponder ao gatilho de técnico (`assignee-that-send-to-taiga`).
+- Cria issue no Taiga quando a categoria do chamado corresponder ao gatilho configurado (`category-that-send-to-taiga`) **ou** quando o usuário responsável corresponder ao gatilho de usuário (`assignee-that-send-to-taiga`).
 - Salva no GLPI os dados da issue criada (ID Taiga e link), usando o `Plugin Fields` — bloco **"Taiga"** (privado).
 - Atualiza o bloco público **"Progresso do chamado"** com o status inicial e, opcionalmente, a data prevista.
 - Recebe eventos do Taiga em `POST /api/webhook/taiga`.
@@ -15,7 +15,7 @@ Middleware em `Spring Boot` para integrar `GLPI` e `Taiga` via webhooks.
 ## Fluxo de integração
 
 1. Chamado é criado/atualizado no GLPI.
-2. Middleware valida o token Bearer do GLPI e, em seguida, categoria/técnico do chamado.
+2. Middleware valida o token Bearer do GLPI e, em seguida, categoria/usuário atribuído do chamado.
 3. Verifica se já existe vínculo com issue do Taiga.
 4. Se necessário, cria issue no projeto Taiga correspondente (ou fallback `Diversos`).
 5. Middleware grava no bloco **"Taiga"** (privado) o ID e o link da issue criada.
@@ -146,7 +146,7 @@ Edite `config/application.yaml` na raiz do projeto. Este arquivo sobrescreve os 
 Ajuste principalmente:
 
 - `glpi.api.category-that-send-to-taiga`: categoria que dispara criação de issue (`*` = qualquer; vazio = desligado).
-- `glpi.api.assignee-that-send-to-taiga`: identificador do técnico que dispara criação de issue (`*` = qualquer; vazio = desligado). O middleware resolve o técnico buscando sequencialmente pelo campo **login** (`name`), depois **sobrenome** (`realname`) e por último **nome** (`firstname`). **Use preferencialmente o login do usuário** (campo `name` no GLPI), que é único — valores como nome próprio podem coincidir com mais de um usuário e resultar em comportamento inesperado.
+- `glpi.api.assignee-that-send-to-taiga`: identificador do usuário atribuído que dispara criação de issue (`*` = qualquer; vazio = desligado). O middleware resolve o usuário atribuído buscando sequencialmente pelo campo **login** (`name`), depois **sobrenome** (`realname`) e por último **nome** (`firstname`). **Use preferencialmente o login do usuário** (campo `name` no GLPI), que é único — valores como nome próprio podem coincidir com mais de um usuário e resultar em comportamento inesperado.
 - `taiga.routing.entity-mappings`: mapeamento de entidade GLPI → projeto Taiga.
 - `taiga.routing.fallback-project-name`: projeto usado quando não houver mapeamento.
 - `glpi.plugin-fields.private-ticket-status-block-name`: nome exato do bloco privado no GLPI.
@@ -159,14 +159,14 @@ O mapeamento de status (`glpi.status-map`) é **opcional**. Os 10 status padrão
 
 ### Cache (opcional)
 
-O middleware armazena em cache sessões, tokens e o ID do técnico configurado para evitar chamadas desnecessárias às APIs. Os TTLs têm defaults razoáveis e raramente precisam de ajuste:
+O middleware armazena em cache sessões, tokens e o ID do usuário atribuído configurado para evitar chamadas desnecessárias às APIs. Os TTLs têm defaults razoáveis e raramente precisam de ajuste:
 
 | Chave | Default | Descrição |
 |---|---|---|
 | `cache.glpi.session-ttl-minutes` | `45` | Duração da sessão GLPI em cache. Deve ser menor que o tempo de expiração configurado no GLPI. |
 | `cache.taiga.token-ttl-hours` | `12` | Duração do token JWT do Taiga em cache. |
 | `cache.taiga.projects-ttl-hours` | `12` | Duração dos metadados de projetos do Taiga em cache. |
-| `cache.glpi.user-id-ttl-hours` | `24` | Duração do ID do técnico (`assignee-that-send-to-taiga`) em cache. Ajuste para um valor menor se usuários forem renomeados com frequência. |
+| `cache.glpi.user-id-ttl-hours` | `24` | Duração do ID do usuário atribuído (`assignee-that-send-to-taiga`) em cache. Ajuste para um valor menor se usuários forem renomeados com frequência. |
 
 Todos os caches de autenticação são invalidados automaticamente em caso de resposta `401`/`403`, independentemente do TTL.
 
