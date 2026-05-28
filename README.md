@@ -254,6 +254,36 @@ docker logs desk2agile -f
 docker logs desk2agile --tail 100
 ```
 
+
+## Healthcheck
+
+O container expõe o endpoint `/actuator/health` (Spring Boot Actuator) para verificação de saúde. O Docker verifica esse endpoint automaticamente a cada 30 segundos e reinicia o container em caso de falha (`restart: on-failure:5`).
+
+### Verificar o status
+
+```bash
+# Status atual (starting | healthy | unhealthy)
+docker inspect --format='{{.State.Health.Status}}' desk2agile
+
+# Histórico das últimas verificações
+docker inspect --format='{{range .State.Health.Log}}{{.ExitCode}} {{.Output}}{{end}}' desk2agile
+
+# Chamar o endpoint diretamente
+curl -s -H "Accept: application/json" http://localhost:8081/actuator/health
+# → {"status":"UP"}
+```
+
+### Parâmetros configurados
+
+| Parâmetro | Valor | Descrição |
+|---|---|---|
+| `interval` | 30s | Intervalo entre verificações |
+| `timeout` | 5s | Timeout de cada verificação |
+| `start_period` | 90s | Carência após inicialização |
+| `retries` | 3 | Falhas consecutivas para marcar como `unhealthy` |
+
+O endpoint não expõe detalhes internos — retorna apenas `{"status":"UP"}` ou `{"status":"DOWN"}`.
+
 ## Certificados SSL customizados
 
 Coloque arquivos `.crt` ou `.pem` na pasta `./certs/`. O `docker-entrypoint.sh` os importa automaticamente no truststore da JVM antes de iniciar a aplicação.

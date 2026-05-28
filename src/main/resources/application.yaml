@@ -59,6 +59,15 @@ integration:
     queue-capacity: 100
     shutdown-timeout: 30
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
 logging:
   level:
     com.chris.glpi_taiga_integration: INFO

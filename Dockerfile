@@ -28,4 +28,7 @@ USER appuser
 
 EXPOSE 8081
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+    CMD wget -qO- --header="Accept: application/json" http://localhost:8081/actuator/health || exit 1
+
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

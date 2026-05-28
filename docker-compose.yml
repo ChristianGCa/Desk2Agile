@@ -3,7 +3,7 @@ services:
     build: .
     image: desk2agile:latest
     container_name: desk2agile
-    restart: unless-stopped
+    restart: on-failure:5
     ports:
       - "8081:8081"
     env_file:
@@ -13,3 +13,9 @@ services:
       - ./config/application.yaml:/app/config/application.yaml:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--header=Accept: application/json", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
