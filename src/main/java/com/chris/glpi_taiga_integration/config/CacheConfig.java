@@ -16,6 +16,7 @@ public class CacheConfig {
     public static final String GLPI_SESSION_CACHE = "glpiSession";
     public static final String TAIGA_TOKEN_CACHE = "taigaToken";
     public static final String TAIGA_PROJECTS_CACHE = "taigaProjects";
+    public static final String GLPI_USER_ID_CACHE = "glpiUserId";
 
     @Value("${cache.glpi.session-ttl-minutes:45}")
     private long glpiSessionTtlMinutes;
@@ -25,6 +26,9 @@ public class CacheConfig {
 
     @Value("${cache.taiga.projects-ttl-hours:12}")
     private long taigaProjectsTtlHours;
+
+    @Value("${cache.glpi.user-id-ttl-hours:24}")
+    private long glpiUserIdTtlHours;
 
     @Bean
     public CacheManager cacheManager() {
@@ -38,6 +42,11 @@ public class CacheConfig {
 
         manager.registerCustomCache(TAIGA_PROJECTS_CACHE,
                 Caffeine.newBuilder().expireAfterWrite(taigaProjectsTtlHours, TimeUnit.HOURS).maximumSize(100).build());
+
+        // Cache de ID de usuário: users_id é estável entre sessões; invalidado automaticamente
+        // em caso de 401 pelo authInvalidationInterceptor junto com os demais caches de auth.
+        manager.registerCustomCache(GLPI_USER_ID_CACHE,
+                Caffeine.newBuilder().expireAfterWrite(glpiUserIdTtlHours, TimeUnit.HOURS).maximumSize(50).build());
 
         return manager;
     }

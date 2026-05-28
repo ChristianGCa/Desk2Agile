@@ -91,9 +91,13 @@ public class RestClientConfig {
 
                 var glpiCache = cacheManager.getCache(CacheConfig.GLPI_SESSION_CACHE);
                 var taigaCache = cacheManager.getCache(CacheConfig.TAIGA_TOKEN_CACHE);
+                // glpiUserId também é invalidado: o token de sessão que resolveu o ID
+                // pode ter expirado, forçando nova resolução na próxima tentativa.
+                var glpiUserIdCache = cacheManager.getCache(CacheConfig.GLPI_USER_ID_CACHE);
 
                 if (glpiCache != null) glpiCache.clear();
                 if (taigaCache != null) taigaCache.clear();
+                if (glpiUserIdCache != null) glpiUserIdCache.clear();
 
                 throw new IntegrationAuthenticationException(
                         "Credenciais recusadas pela API [" + response.getStatusCode()

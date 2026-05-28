@@ -72,33 +72,32 @@ public class IntegrationService {
      * Processa os payloads recebidos do webhook do GLPI.
      * Filtra tickets elegíveis e aplica concorrência isolada por ID.
      * Chamado pelo controller dentro de uma task do {@code webhookExecutor}.
+     *
+     * <p>O filtro {@link #shouldSendTicketToTaiga} é executado <em>dentro</em> do
+     * {@code withAuthRetry}: se a verificação de técnico atribuído receber um 401
+     * (sessão expirada no servidor), o interceptor invalida o cache, lança
+     * {@link com.chris.glpi_taiga_integration.exception.IntegrationAuthenticationException}
+     * e o retry reabre a sessão antes de tentar novamente.
+     *
      * @param payload Dados enviados pelo gatilho do GLPI.
      */
     public void processGlpiWebhook(GlpiWebhookPayload payload) {
         GlpiItem item = payload.item();
-
-        if (!shouldSendTicketToTaiga(item)) {
-            logIgnoredTicket(item);
-            return;
-        }
         Long ticketId = item.id();
         int lockIndex = (ticketId.hashCode() & Integer.MAX_VALUE) % LOCK_STRIPES;
 
         synchronized (locks[lockIndex]) {
-            processGlpiWebhookWithRetry(item, ticketId);
+            withAuthRetry(new Runnable() {
+                @Override
+                public void run() {
+                    if (!shouldSendTicketToTaiga(item)) {
+                        logIgnoredTicket(item);
+                        return;
+                    }
+                    doProcessGlpiWebhook(item, ticketId);
+                }
+            });
         }
-    }
-
-    /**
-     * Executa o fluxo de webhook do GLPI sob a política de repetição de autenticação.
-     */
-    private void processGlpiWebhookWithRetry(GlpiItem item, Long ticketId) {
-        withAuthRetry(new Runnable() {
-            @Override
-            public void run() {
-                doProcessGlpiWebhook(item, ticketId);
-            }
-        });
     }
 
     /**

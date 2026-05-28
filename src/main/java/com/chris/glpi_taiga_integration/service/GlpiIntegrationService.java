@@ -1,6 +1,7 @@
 package com.chris.glpi_taiga_integration.service;
 
 import com.chris.glpi_taiga_integration.dto.GlpiEntityResponse;
+import com.chris.glpi_taiga_integration.config.CacheConfig;
 import com.chris.glpi_taiga_integration.config.GlpiPluginFieldsProperties;
 import com.chris.glpi_taiga_integration.dto.GlpiPluginFieldsRecord;
 import com.chris.glpi_taiga_integration.dto.GlpiSessionResponse;
@@ -552,13 +553,85 @@ public class GlpiIntegrationService {
     }
 
     /**
-     * Busca na API do GLPI se um usuário específico está atribuído ao ticket.
-     * Necessário pois o payload do webhook de atualização frequentemente sofre de atraso (lag)
-     * nas relações (traz o array de usuários desatualizado).
+     * Resolve o ID interno do usuário GLPI a partir do nome configurado.
+     * O resultado é cacheado — o {@code users_id} de um usuário não muda entre sessões.
+     * A busca percorre sequencialmente os campos {@code name} (login), {@code realname}
+     * e {@code firstname}, parando no primeiro resultado encontrado.
+     *
+     * <p>O cache é invalidado automaticamente em 401/403 pelo
+     * {@code authInvalidationInterceptor}, junto com os demais caches de autenticação.
+     *
+     * @param wantedAssignee nome configurado em {@code glpi.api.assignee-that-send-to-taiga}
+     * @param sessionToken   token de sessão ativo
+     * @return ID interno do usuário, ou {@link Optional#empty()} se não encontrado
+     */
+    @Cacheable(value = CacheConfig.GLPI_USER_ID_CACHE, key = "#wantedAssignee")
+    public Optional<Long> resolveUserIdByName(String wantedAssignee, String sessionToken) {
+        for (String field : List.of("name", "realname", "firstname")) {
+            Optional<Long> userId = searchUserByField(field, wantedAssignee, sessionToken);
+            if (userId.isPresent()) {
+                log.debug("GLPI SERVICE - Usuário '{}' resolvido por campo '{}': id={}.",
+                        wantedAssignee, field, userId.get());
+                return userId;
+            }
+        }
+        log.warn("GLPI SERVICE - Usuário '{}' não encontrado em nenhum campo (name/realname/firstname).",
+                wantedAssignee);
+        return Optional.empty();
+    }
+
+    /**
+     * Busca um único usuário pelo valor exato de um campo via {@code searchText} server-side.
+     */
+    private Optional<Long> searchUserByField(String field, String value, String sessionToken) {
+        String uri = glpiApiUrl + "/User?searchText[" + field + "]=" + value + "&range=0-0";
+        try {
+            List<Map<String, Object>> users = restClient.get()
+                    .uri(uri)
+                    .header("Session-Token", sessionToken)
+                    .header("App-Token", glpiAppToken)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
+            if (users == null || users.isEmpty()) return Optional.empty();
+            return Optional.of(getRequiredLong(users.getFirst(), "id"));
+        } catch (RestClientResponseException e) {
+            if (isResourceNotFound(e)) return Optional.empty();
+            throw e; // 401/403 → interceptor lança IntegrationAuthenticationException
+        }
+    }
+
+    /**
+     * Verifica se um usuário está atribuído ao ticket com {@code type=2} (Assignee).
+     *
+     * <p>Executa no máximo <strong>duas chamadas HTTP</strong>:
+     * <ol>
+     *   <li>Resolve o {@code users_id} via {@link #resolveUserIdByName} — usualmente
+     *       servido do cache após a primeira execução.</li>
+     *   <li>Consulta {@code /Ticket_User} com três filtros {@code searchText} combinados
+     *       (AND server-side): {@code tickets_id}, {@code users_id} e {@code type=2}.
+     *       Retorna apenas 0 ou 1 registro ({@code range=0-0}).</li>
+     * </ol>
+     *
+     * <p>{@link com.chris.glpi_taiga_integration.exception.IntegrationAuthenticationException}
+     * NÃO é capturada aqui: ela propaga para {@code withAuthRetry} no
+     * {@link IntegrationService} para acionar a nova tentativa com credenciais frescas.
+     *
+     * @param ticketId       ID do ticket no GLPI
+     * @param wantedAssignee nome do técnico configurado
+     * @param sessionToken   token de sessão ativo
+     * @return {@code true} se o usuário estiver atribuído como responsável
      */
     public boolean isUserAssignedToTicket(Long ticketId, String wantedAssignee, String sessionToken) {
-        log.debug("GLPI SERVICE - Buscando usuários atribuídos via API para o ticket {}.", ticketId);
-        String uri = glpiApiUrl + "/Ticket_User?searchText[tickets_id]=" + ticketId;
+        log.debug("GLPI SERVICE - Verificando atribuição de '{}' ao ticket {}.", wantedAssignee, ticketId);
+
+        Optional<Long> userId = resolveUserIdByName(wantedAssignee, sessionToken);
+        if (userId.isEmpty()) return false;
+
+        String uri = glpiApiUrl + "/Ticket_User"
+                + "?searchText[tickets_id]=" + ticketId
+                + "&searchText[users_id]=" + userId.get()
+                + "&searchText[type]=2"
+                + "&range=0-0";
         try {
             List<Map<String, Object>> records = restClient.get()
                     .uri(uri)
@@ -566,48 +639,10 @@ public class GlpiIntegrationService {
                     .header("App-Token", glpiAppToken)
                     .retrieve()
                     .body(new ParameterizedTypeReference<>() {});
-
-            if (records == null || records.isEmpty()) return false;
-
-            for (Map<String, Object> record : records) {
-                Object typeObj = record.get("type");
-                // type = 2 significa "Atribuído" (Assignee)
-                if (typeObj != null && "2".equals(String.valueOf(typeObj))) {
-                    Object userIdObj = record.get("users_id");
-                    if (userIdObj != null) {
-                        long userId = Long.parseLong(String.valueOf(userIdObj));
-                        String userUri = glpiApiUrl + "/User/" + userId;
-                        try {
-                            Map<String, Object> userRecord = restClient.get()
-                                    .uri(userUri)
-                                    .header("Session-Token", sessionToken)
-                                    .header("App-Token", glpiAppToken)
-                                    .retrieve()
-                                    .body(new ParameterizedTypeReference<>() {});
-
-                            if (userRecord != null) {
-                                String name = String.valueOf(userRecord.get("name"));
-                                String realname = String.valueOf(userRecord.get("realname"));
-                                String firstname = String.valueOf(userRecord.get("firstname"));
-
-                                if (wantedAssignee.equalsIgnoreCase(name) ||
-                                        wantedAssignee.equalsIgnoreCase(realname) ||
-                                        wantedAssignee.equalsIgnoreCase(firstname)) {
-                                    return true;
-                                }
-                            }
-                        } catch (RestClientResponseException e) {
-                            if (e.getStatusCode().is4xxClientError() && e.getResponseBodyAsString().contains("ERROR_RESOURCE_NOT_FOUND_NOR_COMMONDBTM")) {
-                                continue;
-                            }
-                            throw e;
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("GLPI SERVICE - Erro ao verificar Ticket_User via API para o ticket {}: {}", ticketId, e.getMessage());
+            return records != null && !records.isEmpty();
+        } catch (RestClientResponseException e) {
+            if (isResourceNotFound(e)) return false;
+            throw e; // 401/403 → interceptor lança IntegrationAuthenticationException
         }
-        return false;
     }
 }

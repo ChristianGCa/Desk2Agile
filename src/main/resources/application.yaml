@@ -24,15 +24,15 @@ glpi:
     assignee-that-send-to-taiga:
 
   plugin-fields:
-    private-ticket-status-block-name: Informações do Taiga
-    public-ticket-status-block-name: Progresso do Chamado
+    private-ticket-status-block-name: Equipe
+    public-ticket-status-block-name: Chamado Progresso
     status-inicial: Novo
     private-fields:
-      id-taiga: ID Taiga
-      link-taiga: Link Taiga
+      id-taiga: ID numero
+      link-taiga: Link
     public-fields:
-      status-chamado: Status do chamado
-      data-prevista: Data prevista
+      status-chamado: Status Chamado
+      data-prevista: Data chamado
 
   # status-map intencionalmente vazio. Defaults estão em StatusTranslator.java.
   status-map: []

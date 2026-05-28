@@ -58,3 +58,12 @@ glpi:
 #       - ${WEBHOOK_ALLOWED_IP_TAIGA}
 #     glpi-token: ${WEBHOOK_GLPI_TOKEN:}
 #     taiga-secret: ${WEBHOOK_TAIGA_SECRET:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health   # apenas /actuator/health exposto - nada mais
+  endpoint:
+    health:
+      show-details: never # não vazar config interna em produção
